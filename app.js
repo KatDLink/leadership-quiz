@@ -402,6 +402,7 @@ let kajabiPopulateInterval = null;
 let kajabiMaxWaitTimeout = null;
 let kajabiResultTimeout = null;
 let kajabiSubmitBound = false;
+let kajabiCleanupStarted = false;
 
 render();
 
@@ -647,21 +648,20 @@ function hideKajabiCustomFields() {
   let hiddenAny = false;
 
   hiddenFieldNames.forEach((fieldName) => {
-    const field = document.querySelector(`[name="${fieldName}"]`);
-    if (!field) return;
+    const input = document.querySelector(`[name="${fieldName}"]`);
+    if (!input) return;
 
     const wrapper =
-      field.closest(".form-group") ||
-      field.closest(".kajabi-form__field") ||
-      field.closest(".field") ||
-      field.closest(".input") ||
-      field.closest("[class*='field']") ||
-      field.parentElement;
+      input.closest(".form-group") ||
+      input.closest(".kajabi-form__field") ||
+      input.closest(".field") ||
+      input.closest("div") ||
+      input.parentElement;
 
     if (wrapper) {
-      wrapper.classList.add("kajabi-hidden-field");
+      wrapper.style.display = "none";
     } else {
-      field.classList.add("kajabi-hidden-field");
+      input.style.display = "none";
     }
 
     hiddenAny = true;
@@ -672,23 +672,23 @@ function hideKajabiCustomFields() {
   }
 }
 
-function hideKajabiChrome() {
+function cleanKajabiText() {
   const wrapper = document.querySelector("#kajabi-form-wrapper");
   if (!wrapper) return;
 
   KAJABI_CONFIG.copySelectors.forEach((selector) => {
     wrapper.querySelectorAll(selector).forEach((node) => {
-      node.classList.add("kajabi-hidden-copy");
+      node.style.display = "none";
     });
   });
 
-  wrapper.querySelectorAll("h1, h2, h3, p, .headline, .subheadline").forEach((node) => {
+  wrapper.querySelectorAll("h1, h2, h3, p, span").forEach((node) => {
     const text = node.textContent?.trim().toLowerCase() || "";
     if (
       text.includes("join the newsletter") ||
-      text.includes("subscribe to get our latest content by email")
+      text.includes("subscribe to get our latest content")
     ) {
-      node.classList.add("kajabi-hidden-copy");
+      node.style.display = "none";
     }
   });
 }
@@ -723,11 +723,47 @@ function prepareKajabiForm(result) {
   }
 
   console.log("Kajabi form detected");
-  hideKajabiChrome();
+  cleanKajabiText();
   hideKajabiCustomFields();
   const populated = populateKajabiFields(result);
   kajabiPrepared = populated;
   return populated;
+}
+
+function initKajabiCleanup() {
+  if (kajabiCleanupStarted) {
+    console.log("Kajabi already initialized, skipping");
+    if (finalResult) {
+      prepareKajabiForm(finalResult);
+    }
+    return;
+  }
+
+  kajabiCleanupStarted = true;
+  let attempts = 0;
+
+  const interval = window.setInterval(() => {
+    attempts += 1;
+    bindKajabiSubmissionFlow();
+
+    const formExists = document.querySelector("#kajabi-form-wrapper input");
+
+    if (formExists) {
+      console.log("Kajabi form detected");
+      if (finalResult) {
+        prepareKajabiForm(finalResult);
+      } else {
+        cleanKajabiText();
+        hideKajabiCustomFields();
+      }
+      clearInterval(interval);
+    }
+
+    if (attempts > 20) {
+      clearInterval(interval);
+      console.warn("Kajabi form not found");
+    }
+  }, 400);
 }
 
 function clearKajabiWatchers() {
@@ -832,12 +868,14 @@ function initKajabiForm() {
   if (kajabiInitialized) {
     console.log("Kajabi already initialized, skipping");
     bindKajabiSubmissionFlow();
+    initKajabiCleanup();
     return;
   }
 
   kajabiInitialized = true;
   clearKajabiWatchers();
   bindKajabiSubmissionFlow();
+  initKajabiCleanup();
 
   const wrapper = document.querySelector("#kajabi-form-wrapper");
   if (!wrapper) {

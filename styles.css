@@ -401,39 +401,43 @@ h3 {
   gap: 0.95rem;
 }
 
-.kajabi-form-wrapper input[type="text"],
-.kajabi-form-wrapper input[type="email"],
-.kajabi-form-wrapper input:not([type]),
-.kajabi-form-wrapper textarea,
-.kajabi-form-wrapper select {
+#kajabi-form-wrapper input[type="text"],
+#kajabi-form-wrapper input[type="email"],
+#kajabi-form-wrapper input:not([type]),
+#kajabi-form-wrapper textarea,
+#kajabi-form-wrapper select {
   width: 100%;
   min-height: 3.35rem;
-  padding: 0.9rem 1rem;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: rgba(8, 13, 18, 0.88);
-  color: var(--text);
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0f1720;
+  color: white;
 }
 
-.kajabi-form-wrapper input:focus,
-.kajabi-form-wrapper textarea:focus,
-.kajabi-form-wrapper select:focus {
+#kajabi-form-wrapper input:focus,
+#kajabi-form-wrapper textarea:focus,
+#kajabi-form-wrapper select:focus {
   outline: none;
   border-color: rgba(216, 183, 130, 0.65);
   box-shadow: 0 0 0 4px rgba(216, 183, 130, 0.14);
 }
 
-.kajabi-form-wrapper button,
-.kajabi-form-wrapper input[type="submit"] {
+#kajabi-form-wrapper button,
+#kajabi-form-wrapper input[type="submit"] {
   min-height: 3.5rem;
-  padding: 0.95rem 1.3rem;
+  padding: 14px 24px;
   border-radius: 999px;
   border: 0;
-  background: linear-gradient(180deg, #e7c89a 0%, #cda468 100%);
-  color: #11161d;
-  font-weight: 800;
-  box-shadow: 0 14px 28px rgba(205, 164, 104, 0.22);
+  background: #d4a373;
+  color: black;
+  font-weight: 500;
   cursor: pointer;
+}
+
+#kajabi-form-wrapper button:hover,
+#kajabi-form-wrapper input[type="submit"]:hover {
+  opacity: 0.9;
 }
 
 .kajabi-hidden-field {
