@@ -3,12 +3,24 @@ const PATTERNS = ["VOICE", "TRUTH", "RESIST", "BELONG", "POWER"];
 const BOOKING_URL = "https://calendar.app.google/ur7kRpTwqy6FjUnD7";
 const KAJABI_CONFIG = {
   fieldNames: {
-    firstName: ["first_name", "name", "contact[first_name]"],
-    email: ["email", "contact[email]"],
-    primary: "primary_result",
-    secondary: "secondary_result",
-    severity: "severity",
-    helpPriority: "help_priority",
+    firstName: ["form_submission[name]", "first_name", "name", "contact[first_name]"],
+    email: ["form_submission[email]", "email", "contact[email]"],
+    primary: [
+      "form_submission[custom_10]",
+      "primary_result",
+    ],
+    secondary: [
+      "form_submission[custom_11]",
+      "secondary_result",
+    ],
+    severity: [
+      "form_submission[custom_12]",
+      "severity",
+    ],
+    helpPriority: [
+      "form_submission[custom_13]",
+      "help_priority",
+    ],
   },
   pollIntervalMs: 300,
   maxWaitMs: 10000,
@@ -625,7 +637,8 @@ function buildKajabiResultPayload(result) {
 }
 
 function getKajabiFieldByNames(names) {
-  for (const name of names) {
+  const list = Array.isArray(names) ? names : [names];
+  for (const name of list) {
     const field = document.querySelector(`[name="${name}"]`);
     if (field) {
       return field;
@@ -652,7 +665,7 @@ function hideKajabiCustomFields() {
   let hiddenAny = false;
 
   hiddenFieldNames.forEach((fieldName) => {
-    const input = document.querySelector(`[name="${fieldName}"]`);
+    const input = getKajabiFieldByNames(fieldName);
     if (!input) return;
 
     const wrapper =
@@ -698,10 +711,10 @@ function cleanKajabiText() {
 }
 
 function populateKajabiFields(result) {
-  const primaryField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.primary}"]`);
-  const secondaryField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.secondary}"]`);
-  const severityField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.severity}"]`);
-  const helpPriorityField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.helpPriority}"]`);
+  const primaryField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.primary);
+  const secondaryField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.secondary);
+  const severityField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.severity);
+  const helpPriorityField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.helpPriority);
 
   if (!primaryField || !secondaryField || !severityField || !helpPriorityField) {
     return false;
