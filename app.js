@@ -404,6 +404,7 @@ let kajabiResultTimeout = null;
 let kajabiSubmitBound = false;
 let kajabiCleanupStarted = false;
 let visibleLeadBound = false;
+let pendingLeadSubmission = null;
 
 render();
 
@@ -437,6 +438,7 @@ function resetQuiz() {
   clearKajabiWatchers();
   finalResult = null;
   visibleLeadBound = false;
+  pendingLeadSubmission = null;
   state = structuredClone(defaultState);
   saveState();
   trackEvent("quiz_restart", { source: "user_action" });
@@ -729,6 +731,7 @@ function prepareKajabiForm(result) {
   hideKajabiCustomFields();
   const populated = populateKajabiFields(result);
   kajabiPrepared = populated;
+  attemptPendingLeadSubmission();
   return populated;
 }
 
@@ -778,6 +781,36 @@ function showVisibleFormError(message) {
   node.classList.toggle("hidden", !message);
 }
 
+function attemptPendingLeadSubmission() {
+  if (!pendingLeadSubmission) {
+    return false;
+  }
+
+  const firstNameField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.firstName);
+  const emailField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.email);
+  const hiddenForm = document.querySelector("#kajabi-form-wrapper form");
+
+  if (!firstNameField || !emailField || !hiddenForm || !finalResult) {
+    return false;
+  }
+
+  setFieldValue(firstNameField, pendingLeadSubmission.name);
+  setFieldValue(emailField, pendingLeadSubmission.email);
+  populateKajabiFields(finalResult);
+  showVisibleFormError("");
+
+  console.log("Submitting Kajabi form in hidden iframe");
+  pendingLeadSubmission = null;
+
+  if (typeof hiddenForm.requestSubmit === "function") {
+    hiddenForm.requestSubmit();
+  } else {
+    hiddenForm.submit();
+  }
+
+  return true;
+}
+
 function submitVisibleLeadForm(event) {
   event.preventDefault();
 
@@ -791,30 +824,22 @@ function submitVisibleLeadForm(event) {
     return;
   }
 
+  pendingLeadSubmission = {
+    name: nameValue,
+    email: emailValue,
+  };
+
   const firstNameField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.firstName);
   const emailField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.email);
   const hiddenForm = document.querySelector("#kajabi-form-wrapper form");
 
   if (!firstNameField || !emailField || !hiddenForm) {
-    console.log("Kajabi form not ready for background submission");
-    showVisibleFormError("Skjemaet lastet ikke ferdig ennå. Vent et øyeblikk og prøv igjen.");
+    console.log("Kajabi form not ready yet, waiting in background");
+    showVisibleFormError("Skjemaet lastes ferdig i bakgrunnen. Vent et øyeblikk.");
     return;
   }
 
-  showVisibleFormError("");
-  setFieldValue(firstNameField, nameValue);
-  setFieldValue(emailField, emailValue);
-
-  if (finalResult) {
-    populateKajabiFields(finalResult);
-  }
-
-  console.log("Submitting Kajabi form in hidden iframe");
-  if (typeof hiddenForm.requestSubmit === "function") {
-    hiddenForm.requestSubmit();
-  } else {
-    hiddenForm.submit();
-  }
+  attemptPendingLeadSubmission();
 }
 
 function bindVisibleLeadForm() {
