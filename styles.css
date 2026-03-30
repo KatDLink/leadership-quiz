@@ -388,6 +388,64 @@ h3 {
   line-height: 1.7;
 }
 
+.kajabi-visible-form {
+  display: grid;
+  align-content: start;
+}
+
+.visible-lead-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.visible-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.visible-field label {
+  color: var(--soft);
+  font-size: 0.95rem;
+}
+
+.visible-field input {
+  background: #0f1720;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  padding: 14px;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.visible-field input:focus {
+  outline: none;
+  border-color: rgba(216, 183, 130, 0.65);
+  box-shadow: 0 0 0 4px rgba(216, 183, 130, 0.14);
+}
+
+.visible-form-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.95rem;
+}
+
+.kajabi-hidden-host {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  left: -9999px;
+  top: auto;
+}
+
+.kajabi-background-target {
+  width: 1px;
+  height: 1px;
+  border: 0;
+}
+
 .kajabi-form-wrapper {
   min-height: 14rem;
   padding: 1.25rem;

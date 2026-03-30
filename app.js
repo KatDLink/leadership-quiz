@@ -403,6 +403,7 @@ let kajabiMaxWaitTimeout = null;
 let kajabiResultTimeout = null;
 let kajabiSubmitBound = false;
 let kajabiCleanupStarted = false;
+let visibleLeadBound = false;
 
 render();
 
@@ -435,6 +436,7 @@ function setState(patch) {
 function resetQuiz() {
   clearKajabiWatchers();
   finalResult = null;
+  visibleLeadBound = false;
   state = structuredClone(defaultState);
   saveState();
   trackEvent("quiz_restart", { source: "user_action" });
@@ -766,6 +768,71 @@ function initKajabiCleanup() {
   }, 400);
 }
 
+function showVisibleFormError(message) {
+  const node = document.querySelector("#visible-form-error");
+  if (!node) {
+    return;
+  }
+
+  node.textContent = message;
+  node.classList.toggle("hidden", !message);
+}
+
+function submitVisibleLeadForm(event) {
+  event.preventDefault();
+
+  const nameInput = document.querySelector("#visible-name");
+  const emailInput = document.querySelector("#visible-email");
+  const nameValue = nameInput?.value.trim() || "";
+  const emailValue = emailInput?.value.trim() || "";
+
+  if (!nameValue || !emailValue) {
+    showVisibleFormError("Fyll inn navn og e-post for å se resultatet ditt.");
+    return;
+  }
+
+  const firstNameField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.firstName);
+  const emailField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.email);
+  const hiddenForm = document.querySelector("#kajabi-form-wrapper form");
+
+  if (!firstNameField || !emailField || !hiddenForm) {
+    console.log("Kajabi form not ready for background submission");
+    showVisibleFormError("Skjemaet lastet ikke ferdig ennå. Vent et øyeblikk og prøv igjen.");
+    return;
+  }
+
+  showVisibleFormError("");
+  setFieldValue(firstNameField, nameValue);
+  setFieldValue(emailField, emailValue);
+
+  if (finalResult) {
+    populateKajabiFields(finalResult);
+  }
+
+  console.log("Submitting Kajabi form in hidden iframe");
+  if (typeof hiddenForm.requestSubmit === "function") {
+    hiddenForm.requestSubmit();
+  } else {
+    hiddenForm.submit();
+  }
+}
+
+function bindVisibleLeadForm() {
+  const visibleForm = document.querySelector("#visible-lead-form");
+  if (!visibleForm || visibleLeadBound) {
+    return;
+  }
+
+  visibleLeadBound = true;
+  visibleForm.addEventListener("submit", submitVisibleLeadForm);
+
+  visibleForm.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("input", () => {
+      showVisibleFormError("");
+    });
+  });
+}
+
 function clearKajabiWatchers() {
   stopKajabiPopulationWatchers();
 
@@ -831,12 +898,14 @@ function revealResultScreen(source) {
 function bindKajabiSubmissionFlow() {
   const wrapper = document.querySelector("#kajabi-form-wrapper");
   const form = wrapper?.querySelector("form");
+  const iframe = document.querySelector("#kajabi-background-target");
 
   if (!wrapper || !form || kajabiSubmitBound) {
     return;
   }
 
   kajabiSubmitBound = true;
+  form.setAttribute("target", "kajabi-background-target");
 
   form.addEventListener("submit", () => {
     console.log("Kajabi form submitted");
@@ -846,6 +915,15 @@ function bindKajabiSubmissionFlow() {
       revealResultScreen("submit_delay");
     }, KAJABI_CONFIG.submitResultDelayMs);
   });
+
+  if (iframe && !iframe.dataset.bound) {
+    iframe.dataset.bound = "true";
+    iframe.addEventListener("load", () => {
+      if (state.stage === "gate") {
+        revealResultScreen("iframe_load");
+      }
+    });
+  }
 
   kajabiSuccessObserver = new MutationObserver(() => {
     const successNode = KAJABI_CONFIG.successSelectors
@@ -869,6 +947,7 @@ function initKajabiForm() {
     console.log("Kajabi already initialized, skipping");
     bindKajabiSubmissionFlow();
     initKajabiCleanup();
+    bindVisibleLeadForm();
     return;
   }
 
@@ -876,6 +955,7 @@ function initKajabiForm() {
   clearKajabiWatchers();
   bindKajabiSubmissionFlow();
   initKajabiCleanup();
+  bindVisibleLeadForm();
 
   const wrapper = document.querySelector("#kajabi-form-wrapper");
   if (!wrapper) {
@@ -947,6 +1027,7 @@ function render() {
       if (!kajabiPrepared) {
         prepareKajabiForm(finalResult);
       }
+      bindVisibleLeadForm();
       break;
     case "result":
       renderResult();

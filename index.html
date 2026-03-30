@@ -33,8 +33,26 @@
             </p>
           </div>
 
-          <div id="kajabi-form-wrapper" class="kajabi-form-wrapper">
-            <script src="https://www.designlinking.no/forms/2149518448/embed.js"></script>
+          <div class="kajabi-visible-form">
+            <form id="visible-lead-form" class="visible-lead-form" novalidate>
+              <div class="visible-field">
+                <label for="visible-name">Navn</label>
+                <input id="visible-name" name="visible_name" type="text" autocomplete="name" />
+              </div>
+              <div class="visible-field">
+                <label for="visible-email">E-post</label>
+                <input id="visible-email" name="visible_email" type="email" autocomplete="email" />
+              </div>
+              <p id="visible-form-error" class="visible-form-error hidden"></p>
+              <button type="submit" class="button">Se resultatet mitt</button>
+            </form>
+          </div>
+
+          <div class="kajabi-hidden-host" aria-hidden="true">
+            <iframe name="kajabi-background-target" id="kajabi-background-target" class="kajabi-background-target"></iframe>
+            <div id="kajabi-form-wrapper" class="kajabi-form-wrapper">
+              <script src="https://www.designlinking.no/forms/2149518448/embed.js"></script>
+            </div>
           </div>
         </div>
       </div>
