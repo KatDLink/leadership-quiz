@@ -356,18 +356,56 @@ h3 {
   gap: 1rem;
 }
 
-.field {
+.hidden {
+  display: none !important;
+}
+
+.quiz-step {
+  position: relative;
+  z-index: 1;
+  width: min(calc(100% - 2rem), var(--max-width));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.kajabi-step-content {
   display: grid;
-  gap: 0.45rem;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  padding: clamp(1.5rem, 2vw, 2rem);
 }
 
-.field label {
+.kajabi-copy {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.kajabi-copy p,
+.kajabi-support {
+  margin: 0;
   color: var(--soft);
-  font-size: 0.95rem;
+  line-height: 1.7;
 }
 
-.field input,
-.field select {
+.kajabi-form-wrapper {
+  min-height: 14rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.kajabi-form-wrapper form {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.kajabi-form-wrapper input[type="text"],
+.kajabi-form-wrapper input[type="email"],
+.kajabi-form-wrapper input:not([type]),
+.kajabi-form-wrapper textarea,
+.kajabi-form-wrapper select {
   width: 100%;
   min-height: 3.35rem;
   padding: 0.9rem 1rem;
@@ -377,45 +415,33 @@ h3 {
   color: var(--text);
 }
 
-.field input:focus,
-.field select:focus {
+.kajabi-form-wrapper input:focus,
+.kajabi-form-wrapper textarea:focus,
+.kajabi-form-wrapper select:focus {
   outline: none;
   border-color: rgba(216, 183, 130, 0.65);
   box-shadow: 0 0 0 4px rgba(216, 183, 130, 0.14);
 }
 
-.consent {
-  display: flex;
-  gap: 0.8rem;
-  align-items: flex-start;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.02);
+.kajabi-form-wrapper button,
+.kajabi-form-wrapper input[type="submit"] {
+  min-height: 3.5rem;
+  padding: 0.95rem 1.3rem;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(180deg, #e7c89a 0%, #cda468 100%);
+  color: #11161d;
+  font-weight: 800;
+  box-shadow: 0 14px 28px rgba(205, 164, 104, 0.22);
+  cursor: pointer;
 }
 
-.consent input {
-  margin-top: 0.2rem;
+.kajabi-hidden-field {
+  display: none !important;
 }
 
-.consent p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.6;
-}
-
-.error-text,
-.success-text {
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.error-text {
-  color: var(--danger);
-}
-
-.success-text {
-  color: #b8d9c0;
+.kajabi-hidden-copy {
+  display: none !important;
 }
 
 .result-header {
@@ -496,7 +522,8 @@ h3 {
 @media (max-width: 900px) {
   .hero-card,
   .gate-grid,
-  .result-grid {
+  .result-grid,
+  .kajabi-step-content {
     grid-template-columns: 1fr;
   }
 
@@ -524,6 +551,11 @@ h3 {
 
 @media (max-width: 640px) {
   .app {
+    width: min(calc(100% - 1rem), var(--max-width));
+    padding: 0.5rem 0 1.2rem;
+  }
+
+  .quiz-step {
     width: min(calc(100% - 1rem), var(--max-width));
     padding: 0.5rem 0 1.2rem;
   }

@@ -10,7 +10,7 @@ const KAJABI_CONFIG = {
     severity: "severity",
     helpPriority: "help_priority",
   },
-  pollIntervalMs: 400,
+  pollIntervalMs: 300,
   maxWaitMs: 10000,
   submitResultDelayMs: 1500,
   successSelectors: [
@@ -19,6 +19,16 @@ const KAJABI_CONFIG = {
     ".success-message",
     "[data-form-success]",
     ".kjb-form-confirmation",
+  ],
+  copySelectors: [
+    ".form-title",
+    ".form-subtitle",
+    ".kajabi-form__title",
+    ".kajabi-form__subtitle",
+    ".kjb-form-title",
+    ".kjb-form-description",
+    ".headline",
+    ".subheadline",
   ],
 };
 
@@ -30,45 +40,30 @@ const PATTERN_LABELS = {
   POWER: "Uformelle maktstrukturer",
 };
 
-const ROLE_TAGS = {
-  "Senior leder": "role_senior_leder",
-  Mellomleder: "role_mellomleder",
-  Annet: "role_annet",
-  "": "role_annet",
-};
-
 const HELP_PRIORITY_META = {
   understand: {
     label: "Å forstå hva som faktisk skjer",
     tag: "goal_understand",
     resultCopy:
       "Å få et tydeligere bilde av hva som faktisk skjer i teamet – før du prøver å løse det. Når underliggende mønstre blir tydeligere, blir det også lettere å vite hvor du skal sette inn innsatsen.",
-    ctaSupport:
-      "Hvis du ønsker å forstå hva som faktisk skjer i teamet ditt, kan en samtale være et nyttig sted å starte.",
   },
   progress: {
     label: "Å få bedre fremdrift",
     tag: "goal_progress",
     resultCopy:
       "Å få bedre fremdrift uten å presse hardere. Når teamet stopper opp, handler det ofte mindre om kapasitet og mer om det som ikke er avklart eller ikke blir sagt.",
-    ctaSupport:
-      "Hvis du ønsker mer fremdrift uten mer friksjon, kan en samtale være et nyttig neste steg.",
   },
   dynamics: {
     label: "Å håndtere krevende dynamikk i teamet",
     tag: "goal_dynamics",
     resultCopy:
       "Å forstå og håndtere den krevende dynamikken i teamet på en måte som skaper mer trygghet og mindre friksjon. Det begynner ofte med å gjøre mønstrene synlige.",
-    ctaSupport:
-      "Hvis du står i krevende dynamikk i teamet ditt, kan det være nyttig å se nærmere på hva som faktisk driver det.",
   },
   collaboration: {
     label: "Å skape tydeligere samarbeid og ansvar",
     tag: "goal_collaboration",
     resultCopy:
       "Å skape tydeligere samarbeid, ansvar og felles retning. Når roller, forventninger og beslutningsgrenser blir tydeligere, blir det også lettere å jobbe sammen på en god måte.",
-    ctaSupport:
-      "Hvis du ønsker tydeligere samarbeid og ansvar i teamet, kan en samtale være et godt sted å begynne.",
   },
 };
 
@@ -392,18 +387,15 @@ const defaultState = {
   stage: "landing",
   currentQuestionIndex: 0,
   answers: {},
-  lead: {
-    firstName: "",
-    email: "",
-  },
   helpPriority: "",
-  gateError: "",
   results: null,
 };
 
 let state = loadState();
 const app = document.querySelector("#app");
 let finalResult = null;
+let kajabiInitialized = false;
+let kajabiPrepared = false;
 let kajabiFieldObserver = null;
 let kajabiSuccessObserver = null;
 let kajabiPopulateInterval = null;
@@ -420,14 +412,9 @@ function loadState() {
       return structuredClone(defaultState);
     }
 
-    const parsed = JSON.parse(raw);
     return {
       ...structuredClone(defaultState),
-      ...parsed,
-      lead: {
-        ...structuredClone(defaultState).lead,
-        ...(parsed.lead || {}),
-      },
+      ...JSON.parse(raw),
     };
   } catch {
     return structuredClone(defaultState);
@@ -442,29 +429,6 @@ function setState(patch) {
   state = { ...state, ...patch };
   saveState();
   render();
-}
-
-function updateLead(patch) {
-  state = {
-    ...state,
-    lead: {
-      ...state.lead,
-      ...patch,
-    },
-  };
-  saveState();
-}
-
-function clearGateError() {
-  if (!state.gateError) {
-    return;
-  }
-
-  state = {
-    ...state,
-    gateError: "",
-  };
-  saveState();
 }
 
 function resetQuiz() {
@@ -486,7 +450,8 @@ function answerQuestion(questionId, optionKey) {
 
   const isLastQuestion = state.currentQuestionIndex === QUESTIONS.length - 1;
   const computedResult = isLastQuestion ? calculateResults(nextAnswers) : state.results;
-  const nextState = {
+
+  state = {
     ...state,
     answers: nextAnswers,
     helpPriority: selectedOption?.helpPriority || state.helpPriority,
@@ -494,24 +459,26 @@ function answerQuestion(questionId, optionKey) {
     stage: isLastQuestion ? "gate" : "question",
     results: computedResult,
   };
-
-  state = nextState;
   saveState();
+
   if (isLastQuestion && computedResult) {
     finalResult = buildKajabiResultPayload(computedResult);
-    console.log("Quiz finished. Final result ready:", finalResult);
+    console.log("Final quiz result:", finalResult);
   }
+
   trackEvent("quiz_answered", {
     question_id: questionId,
     answer_key: optionKey,
     question_index: state.currentQuestionIndex + 1,
   });
+
   if (questionId === "Q15" && selectedOption?.helpPriority) {
     trackEvent("quiz_help_priority_selected", {
       selected_value: selectedOption.helpPriority,
       selected_label: HELP_PRIORITY_META[selectedOption.helpPriority]?.label || selectedOption.text,
     });
   }
+
   render();
 }
 
@@ -527,7 +494,6 @@ function goBack() {
   }
 
   if (state.stage === "gate") {
-    clearKajabiWatchers();
     setState({ stage: "question", currentQuestionIndex: QUESTIONS.length - 1 });
     return;
   }
@@ -580,20 +546,19 @@ function calculateResults(answers) {
       } else {
         coreTotals[pattern] += value;
       }
+
       totals[pattern] += value;
+
       if (value === 3) {
         maxAnswerCounts[pattern] += 1;
       }
     });
   });
 
-  const severity =
-    severityTotal <= 10 ? "LOW" : severityTotal <= 20 ? "MEDIUM" : "HIGH";
-
+  const severity = severityTotal <= 10 ? "LOW" : severityTotal <= 20 ? "MEDIUM" : "HIGH";
   const rankedPatterns = [...PATTERNS].sort((left, right) =>
     comparePatterns(left, right, totals, maxAnswerCounts, answers)
   );
-
   const primary = rankedPatterns[0];
   const secondary = rankedPatterns[1] || primary;
   const helpMeta = HELP_PRIORITY_META[helpPriority] || null;
@@ -631,6 +596,7 @@ function getLatestIdentityWeight(pattern, answers) {
   const identityQuestions = QUESTIONS.filter((question) =>
     ["Q10", "Q11", "Q12", "Q13"].includes(question.id)
   );
+
   for (let index = identityQuestions.length - 1; index >= 0; index -= 1) {
     const question = identityQuestions[index];
     const answerKey = answers[question.id];
@@ -640,6 +606,7 @@ function getLatestIdentityWeight(pattern, answers) {
       return (index + 1) * 10 + value;
     }
   }
+
   return 0;
 }
 
@@ -669,36 +636,23 @@ function setFieldValue(field, value) {
   field.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function populateKajabiFields(result, lead) {
-  const firstNameField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.firstName);
-  const emailField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.email);
-  const primaryField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.primary}"]`);
-  const secondaryField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.secondary}"]`);
-  const severityField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.severity}"]`);
-  const helpPriorityField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.helpPriority}"]`);
+function hideKajabiCustomFields() {
+  const hiddenFieldNames = [
+    KAJABI_CONFIG.fieldNames.primary,
+    KAJABI_CONFIG.fieldNames.secondary,
+    KAJABI_CONFIG.fieldNames.severity,
+    KAJABI_CONFIG.fieldNames.helpPriority,
+  ];
 
-  if (!firstNameField || !emailField || !primaryField || !secondaryField || !severityField || !helpPriorityField) {
-    return false;
-  }
+  let hiddenAny = false;
 
-  setFieldValue(firstNameField, lead.firstName);
-  setFieldValue(emailField, lead.email);
-  setFieldValue(primaryField, result.primaryResult);
-  setFieldValue(secondaryField, result.secondaryResult);
-  setFieldValue(severityField, result.severity);
-  setFieldValue(helpPriorityField, result.helpPriority);
+  hiddenFieldNames.forEach((fieldName) => {
+    const field = document.querySelector(`[name="${fieldName}"]`);
+    if (!field) return;
 
-  hideKajabiResultFields([primaryField, secondaryField, severityField, helpPriorityField].filter(Boolean));
-
-  console.log("Kajabi fields found");
-  console.log("Populating Kajabi with:", { ...result, firstName: lead.firstName, email: lead.email });
-  return true;
-}
-
-function hideKajabiResultFields(fields) {
-  fields.forEach((field) => {
     const wrapper =
       field.closest(".form-group") ||
+      field.closest(".kajabi-form__field") ||
       field.closest(".field") ||
       field.closest(".input") ||
       field.closest("[class*='field']") ||
@@ -709,7 +663,71 @@ function hideKajabiResultFields(fields) {
     } else {
       field.classList.add("kajabi-hidden-field");
     }
+
+    hiddenAny = true;
   });
+
+  if (hiddenAny) {
+    console.log("Kajabi custom fields hidden");
+  }
+}
+
+function hideKajabiChrome() {
+  const wrapper = document.querySelector("#kajabi-form-wrapper");
+  if (!wrapper) return;
+
+  KAJABI_CONFIG.copySelectors.forEach((selector) => {
+    wrapper.querySelectorAll(selector).forEach((node) => {
+      node.classList.add("kajabi-hidden-copy");
+    });
+  });
+
+  wrapper.querySelectorAll("h1, h2, h3, p, .headline, .subheadline").forEach((node) => {
+    const text = node.textContent?.trim().toLowerCase() || "";
+    if (
+      text.includes("join the newsletter") ||
+      text.includes("subscribe to get our latest content by email")
+    ) {
+      node.classList.add("kajabi-hidden-copy");
+    }
+  });
+}
+
+function populateKajabiFields(result) {
+  const primaryField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.primary}"]`);
+  const secondaryField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.secondary}"]`);
+  const severityField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.severity}"]`);
+  const helpPriorityField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.helpPriority}"]`);
+
+  if (!primaryField || !secondaryField || !severityField || !helpPriorityField) {
+    return false;
+  }
+
+  setFieldValue(primaryField, result.primaryResult);
+  setFieldValue(secondaryField, result.secondaryResult);
+  setFieldValue(severityField, result.severity);
+  setFieldValue(helpPriorityField, result.helpPriority);
+  console.log("Kajabi fields populated");
+  console.log("Populating Kajabi with:", result);
+  return true;
+}
+
+function prepareKajabiForm(result) {
+  if (!result) return false;
+
+  const firstNameField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.firstName);
+  const emailField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.email);
+
+  if (!firstNameField || !emailField) {
+    return false;
+  }
+
+  console.log("Kajabi form detected");
+  hideKajabiChrome();
+  hideKajabiCustomFields();
+  const populated = populateKajabiFields(result);
+  kajabiPrepared = populated;
+  return populated;
 }
 
 function clearKajabiWatchers() {
@@ -726,6 +744,7 @@ function clearKajabiWatchers() {
   }
 
   kajabiSubmitBound = false;
+  kajabiPrepared = false;
 }
 
 function stopKajabiPopulationWatchers() {
@@ -745,61 +764,6 @@ function stopKajabiPopulationWatchers() {
   }
 }
 
-function tryPopulateKajabiFields(result, lead) {
-  if (!result || !lead?.firstName || !lead?.email) {
-    return false;
-  }
-
-  return populateKajabiFields(result, lead);
-}
-
-function mountKajabiEmbed() {
-  const wrapper = document.querySelector("#kajabi-form-wrapper");
-  const source = document.querySelector("#kajabi-embed-source");
-
-  if (!wrapper || !source) {
-    return;
-  }
-
-  if (wrapper.dataset.embedMounted === "true") {
-    return;
-  }
-
-  const hasMeaningfulEmbed = Array.from(source.childNodes).some((node) => {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      return true;
-    }
-
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent.trim().length > 0;
-    }
-
-    return false;
-  });
-
-  if (!hasMeaningfulEmbed) {
-    return;
-  }
-
-  wrapper.innerHTML = "";
-
-  Array.from(source.childNodes).forEach((node) => {
-    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT") {
-      const script = document.createElement("script");
-      Array.from(node.attributes).forEach((attribute) => {
-        script.setAttribute(attribute.name, attribute.value);
-      });
-      script.textContent = node.textContent;
-      wrapper.appendChild(script);
-      return;
-    }
-
-    wrapper.appendChild(node.cloneNode(true));
-  });
-
-  wrapper.dataset.embedMounted = "true";
-}
-
 function revealResultScreen(source) {
   if (!state.results) {
     state = {
@@ -816,6 +780,7 @@ function revealResultScreen(source) {
     stage: "result",
   };
   saveState();
+
   trackEvent("quiz_result_viewed", {
     primary_result: state.results.primary,
     secondary_result: state.results.secondary,
@@ -823,6 +788,7 @@ function revealResultScreen(source) {
     helpPriority: state.results.helpPriority,
     source,
   });
+
   render();
 }
 
@@ -835,6 +801,7 @@ function bindKajabiSubmissionFlow() {
   }
 
   kajabiSubmitBound = true;
+
   form.addEventListener("submit", () => {
     console.log("Kajabi form submitted");
     trackEvent("quiz_gate_submitted", finalResult || {});
@@ -861,19 +828,14 @@ function bindKajabiSubmissionFlow() {
   });
 }
 
-function initializeKajabiStep() {
-  const computedResult = state.results || calculateResults(state.answers);
-  finalResult = buildKajabiResultPayload(computedResult);
-  console.log("Kajabi step shown");
-  console.log("Final quiz result:", finalResult);
+function initKajabiForm() {
+  if (kajabiInitialized) {
+    console.log("Kajabi already initialized, skipping");
+    bindKajabiSubmissionFlow();
+    return;
+  }
 
-  state = {
-    ...state,
-    results: computedResult,
-  };
-  saveState();
-
-  mountKajabiEmbed();
+  kajabiInitialized = true;
   clearKajabiWatchers();
   bindKajabiSubmissionFlow();
 
@@ -885,7 +847,7 @@ function initializeKajabiStep() {
 
   kajabiFieldObserver = new MutationObserver(() => {
     bindKajabiSubmissionFlow();
-    if (tryPopulateKajabiFields(finalResult, state.lead)) {
+    if (prepareKajabiForm(finalResult)) {
       stopKajabiPopulationWatchers();
     }
   });
@@ -898,72 +860,17 @@ function initializeKajabiStep() {
 
   kajabiPopulateInterval = window.setInterval(() => {
     bindKajabiSubmissionFlow();
-    if (tryPopulateKajabiFields(finalResult, state.lead)) {
+    if (prepareKajabiForm(finalResult)) {
       stopKajabiPopulationWatchers();
     }
   }, KAJABI_CONFIG.pollIntervalMs);
 
   kajabiMaxWaitTimeout = window.setTimeout(() => {
-    if (!tryPopulateKajabiFields(finalResult, state.lead)) {
+    if (!prepareKajabiForm(finalResult)) {
       console.log("Kajabi fields could not be found within timeout");
     }
     stopKajabiPopulationWatchers();
   }, KAJABI_CONFIG.maxWaitMs);
-}
-
-function submitVisibleLeadForm(event) {
-  event.preventDefault();
-
-  const firstName = state.lead.firstName.trim();
-  const email = state.lead.email.trim();
-
-  if (!firstName || !email) {
-    setState({ gateError: "Fyll inn navn og e-post for å se resultatet ditt." });
-    return;
-  }
-
-  const computedResult = state.results || calculateResults(state.answers);
-  finalResult = buildKajabiResultPayload(computedResult);
-
-  state = {
-    ...state,
-    gateError: "",
-    results: computedResult,
-    lead: {
-      ...state.lead,
-      firstName,
-      email,
-    },
-  };
-  saveState();
-
-  const populated = tryPopulateKajabiFields(finalResult, state.lead);
-  if (!populated) {
-    console.log("Kajabi fields not ready at visible form submit");
-    setState({
-      gateError:
-        "Skjemaet lastet ikke ferdig ennå. Vent et øyeblikk og prøv igjen.",
-    });
-    return;
-  }
-
-  const hiddenForm = document.querySelector("#kajabi-form-wrapper form");
-  if (!hiddenForm) {
-    console.log("Kajabi form not found for background submit");
-    setState({
-      gateError:
-        "Vi fant ikke innsendingen i bakgrunnen. Sjekk at Kajabi-skjemaet er lastet riktig.",
-    });
-    return;
-  }
-
-  console.log("Submitting Kajabi form in background");
-
-  if (typeof hiddenForm.requestSubmit === "function") {
-    hiddenForm.requestSubmit();
-  } else {
-    hiddenForm.submit();
-  }
 }
 
 function trackEvent(name, payload = {}) {
@@ -980,15 +887,28 @@ function trackEvent(name, payload = {}) {
   }
 }
 
+function toggleKajabiStep(isVisible) {
+  const kajabiStep = document.querySelector("#kajabi-step");
+  if (!kajabiStep) return;
+  kajabiStep.classList.toggle("hidden", !isVisible);
+}
+
 function render() {
   app.className = "app fade-enter";
+  toggleKajabiStep(state.stage === "gate");
 
   switch (state.stage) {
     case "question":
       renderQuestion();
       break;
     case "gate":
-      renderGate();
+      app.innerHTML = "";
+      finalResult = buildKajabiResultPayload(state.results || calculateResults(state.answers));
+      console.log("Final quiz result:", finalResult);
+      initKajabiForm();
+      if (!kajabiPrepared) {
+        prepareKajabiForm(finalResult);
+      }
       break;
     case "result":
       renderResult();
@@ -1087,63 +1007,6 @@ function renderQuestion() {
   `;
 }
 
-function renderGate() {
-  app.innerHTML = `
-    <section class="gate-layout">
-      <div class="gate-card panel">
-        <div class="topbar">
-          <span class="section-label"><strong>Diagnose</strong> Klar til beregning</span>
-          <button class="back-button" data-action="go-back">Tilbake</button>
-        </div>
-
-        <div class="gate-grid">
-          <div class="gate-copy">
-            <h2 class="question-title">Vil du se diagnosen din?</h2>
-            <p class="gate-intro">
-              Legg inn navn og e-post, så sender jeg deg resultatet ditt med en kort forklaring på hva som sannsynligvis preger teamet ditt akkurat nå.
-            </p>
-            <p class="gate-intro">
-              Du får også relevante oppfølginger knyttet til utfordringen quizen peker på.
-            </p>
-          </div>
-
-          <form class="form-grid" data-form="visible-lead-gate">
-            <div class="field">
-              <label for="visibleFirstName">Navn</label>
-              <input id="visibleFirstName" name="visibleFirstName" type="text" autocomplete="name" value="${escapeHtml(
-                state.lead.firstName
-              )}" />
-            </div>
-
-            <div class="field">
-              <label for="visibleEmail">E-post</label>
-              <input id="visibleEmail" name="visibleEmail" type="email" autocomplete="email" value="${escapeHtml(
-                state.lead.email
-              )}" />
-            </div>
-
-            ${state.gateError ? `<p class="error-text">${state.gateError}</p>` : ""}
-
-            <div class="button-row">
-              <button class="button" type="submit">Se resultatet mitt</button>
-            </div>
-          </form>
-        </div>
-
-        <div id="kajabi-step" class="kajabi-background-host" aria-hidden="true">
-          <div id="kajabi-form-wrapper" class="kajabi-form-wrapper">
-            <div class="kajabi-placeholder">
-              <p>Lim inn Kajabi embed-koden i <code>#kajabi-embed-source</code> i <code>index.html</code>.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  `;
-
-  initializeKajabiStep();
-}
-
 function renderResult() {
   const results = state.results || calculateResults(state.answers);
   const content = RESULT_CONTENT[results.primary];
@@ -1213,7 +1076,7 @@ function renderResult() {
         <p class="cta-support">${ctaText}</p>
         <div class="button-row">
           <a class="button" data-action="book-call" href="${BOOKING_URL}" target="_blank" rel="noreferrer noopener">Book en samtale</a>
-          <button class="ghost-button" data-action="restart-quiz">Ta quizen for et annet team</button>
+          <button class="ghost-button" data-action="restart-quiz">Ta quizen på nytt for et annet team</button>
         </div>
         <p class="cta-support">25 min – uforpliktende samtale</p>
       </div>
@@ -1248,28 +1111,4 @@ function wireEvents() {
       });
     });
   });
-
-  const visibleLeadForm = document.querySelector("[data-form='visible-lead-gate']");
-  if (visibleLeadForm) {
-    visibleLeadForm.addEventListener("submit", submitVisibleLeadForm);
-
-    visibleLeadForm.querySelector("#visibleFirstName")?.addEventListener("input", (event) => {
-      updateLead({ firstName: event.target.value });
-      clearGateError();
-    });
-
-    visibleLeadForm.querySelector("#visibleEmail")?.addEventListener("input", (event) => {
-      updateLead({ email: event.target.value });
-      clearGateError();
-    });
-  }
-}
-
-function escapeHtml(value) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }
