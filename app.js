@@ -1,5 +1,26 @@
 const STORAGE_KEY = "team-surface-quiz-state-v1";
 const PATTERNS = ["VOICE", "TRUTH", "RESIST", "BELONG", "POWER"];
+const BOOKING_URL = "https://calendar.app.google/ur7kRpTwqy6FjUnD7";
+const KAJABI_CONFIG = {
+  fieldNames: {
+    firstName: ["first_name", "name", "contact[first_name]"],
+    email: ["email", "contact[email]"],
+    primary: "primary_result",
+    secondary: "secondary_result",
+    severity: "severity",
+    helpPriority: "help_priority",
+  },
+  pollIntervalMs: 400,
+  maxWaitMs: 10000,
+  submitResultDelayMs: 1500,
+  successSelectors: [
+    ".form-success",
+    ".kajabi-form__success",
+    ".success-message",
+    "[data-form-success]",
+    ".kjb-form-confirmation",
+  ],
+};
 
 const PATTERN_LABELS = {
   VOICE: "Skjev fordeling av plass og stemme",
@@ -374,17 +395,21 @@ const defaultState = {
   lead: {
     firstName: "",
     email: "",
-    role: "",
-    consent: false,
   },
   helpPriority: "",
-  submissionStatus: "idle",
-  submissionMessage: "",
+  gateError: "",
   results: null,
 };
 
 let state = loadState();
 const app = document.querySelector("#app");
+let finalResult = null;
+let kajabiFieldObserver = null;
+let kajabiSuccessObserver = null;
+let kajabiPopulateInterval = null;
+let kajabiMaxWaitTimeout = null;
+let kajabiResultTimeout = null;
+let kajabiSubmitBound = false;
 
 render();
 
@@ -401,7 +426,7 @@ function loadState() {
       ...parsed,
       lead: {
         ...structuredClone(defaultState).lead,
-        ...parsed.lead,
+        ...(parsed.lead || {}),
       },
     };
   } catch {
@@ -430,7 +455,21 @@ function updateLead(patch) {
   saveState();
 }
 
+function clearGateError() {
+  if (!state.gateError) {
+    return;
+  }
+
+  state = {
+    ...state,
+    gateError: "",
+  };
+  saveState();
+}
+
 function resetQuiz() {
+  clearKajabiWatchers();
+  finalResult = null;
   state = structuredClone(defaultState);
   saveState();
   trackEvent("quiz_restart", { source: "user_action" });
@@ -446,16 +485,22 @@ function answerQuestion(questionId, optionKey) {
   };
 
   const isLastQuestion = state.currentQuestionIndex === QUESTIONS.length - 1;
+  const computedResult = isLastQuestion ? calculateResults(nextAnswers) : state.results;
   const nextState = {
     ...state,
     answers: nextAnswers,
     helpPriority: selectedOption?.helpPriority || state.helpPriority,
     currentQuestionIndex: isLastQuestion ? state.currentQuestionIndex : state.currentQuestionIndex + 1,
     stage: isLastQuestion ? "gate" : "question",
+    results: computedResult,
   };
 
   state = nextState;
   saveState();
+  if (isLastQuestion && computedResult) {
+    finalResult = buildKajabiResultPayload(computedResult);
+    console.log("Quiz finished. Final result ready:", finalResult);
+  }
   trackEvent("quiz_answered", {
     question_id: questionId,
     answer_key: optionKey,
@@ -482,6 +527,7 @@ function goBack() {
   }
 
   if (state.stage === "gate") {
+    clearKajabiWatchers();
     setState({ stage: "question", currentQuestionIndex: QUESTIONS.length - 1 });
     return;
   }
@@ -566,7 +612,6 @@ function calculateResults(answers) {
     coreTotals,
     softTotals,
     maxAnswerCounts,
-    tags: buildTags(primary, secondary, severity, state.lead.role, helpPriority),
   };
 }
 
@@ -598,108 +643,327 @@ function getLatestIdentityWeight(pattern, answers) {
   return 0;
 }
 
-function buildTags(primary, secondary, severity, role, helpPriority) {
-  const primaryTag = `quiz_${primary.toLowerCase()}`;
-  const secondaryTag = `quiz_secondary_${secondary.toLowerCase()}`;
-  const severityTag = `quiz_${severity.toLowerCase()}`;
-  const roleTag = ROLE_TAGS[role] || ROLE_TAGS[""];
-  const helpPriorityTag = HELP_PRIORITY_META[helpPriority]?.tag;
-
-  return [primaryTag, secondaryTag, severityTag, roleTag, helpPriorityTag].filter(Boolean);
+function buildKajabiResultPayload(result) {
+  return {
+    primaryResult: result.primaryResult,
+    secondaryResult: result.secondaryResult,
+    severity: result.severity,
+    helpPriority: result.helpPriority,
+  };
 }
 
-async function submitLeadForm(event) {
+function getKajabiFieldByNames(names) {
+  for (const name of names) {
+    const field = document.querySelector(`[name="${name}"]`);
+    if (field) {
+      return field;
+    }
+  }
+  return null;
+}
+
+function setFieldValue(field, value) {
+  field.value = value;
+  field.setAttribute("value", value);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  field.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function populateKajabiFields(result, lead) {
+  const firstNameField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.firstName);
+  const emailField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.email);
+  const primaryField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.primary}"]`);
+  const secondaryField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.secondary}"]`);
+  const severityField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.severity}"]`);
+  const helpPriorityField = document.querySelector(`[name="${KAJABI_CONFIG.fieldNames.helpPriority}"]`);
+
+  if (!firstNameField || !emailField || !primaryField || !secondaryField || !severityField || !helpPriorityField) {
+    return false;
+  }
+
+  setFieldValue(firstNameField, lead.firstName);
+  setFieldValue(emailField, lead.email);
+  setFieldValue(primaryField, result.primaryResult);
+  setFieldValue(secondaryField, result.secondaryResult);
+  setFieldValue(severityField, result.severity);
+  setFieldValue(helpPriorityField, result.helpPriority);
+
+  hideKajabiResultFields([primaryField, secondaryField, severityField, helpPriorityField].filter(Boolean));
+
+  console.log("Kajabi fields found");
+  console.log("Populating Kajabi with:", { ...result, firstName: lead.firstName, email: lead.email });
+  return true;
+}
+
+function hideKajabiResultFields(fields) {
+  fields.forEach((field) => {
+    const wrapper =
+      field.closest(".form-group") ||
+      field.closest(".field") ||
+      field.closest(".input") ||
+      field.closest("[class*='field']") ||
+      field.parentElement;
+
+    if (wrapper) {
+      wrapper.classList.add("kajabi-hidden-field");
+    } else {
+      field.classList.add("kajabi-hidden-field");
+    }
+  });
+}
+
+function clearKajabiWatchers() {
+  stopKajabiPopulationWatchers();
+
+  if (kajabiSuccessObserver) {
+    kajabiSuccessObserver.disconnect();
+    kajabiSuccessObserver = null;
+  }
+
+  if (kajabiResultTimeout) {
+    clearTimeout(kajabiResultTimeout);
+    kajabiResultTimeout = null;
+  }
+
+  kajabiSubmitBound = false;
+}
+
+function stopKajabiPopulationWatchers() {
+  if (kajabiFieldObserver) {
+    kajabiFieldObserver.disconnect();
+    kajabiFieldObserver = null;
+  }
+
+  if (kajabiPopulateInterval) {
+    clearInterval(kajabiPopulateInterval);
+    kajabiPopulateInterval = null;
+  }
+
+  if (kajabiMaxWaitTimeout) {
+    clearTimeout(kajabiMaxWaitTimeout);
+    kajabiMaxWaitTimeout = null;
+  }
+}
+
+function tryPopulateKajabiFields(result, lead) {
+  if (!result || !lead?.firstName || !lead?.email) {
+    return false;
+  }
+
+  return populateKajabiFields(result, lead);
+}
+
+function mountKajabiEmbed() {
+  const wrapper = document.querySelector("#kajabi-form-wrapper");
+  const source = document.querySelector("#kajabi-embed-source");
+
+  if (!wrapper || !source) {
+    return;
+  }
+
+  if (wrapper.dataset.embedMounted === "true") {
+    return;
+  }
+
+  const hasMeaningfulEmbed = Array.from(source.childNodes).some((node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      return true;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent.trim().length > 0;
+    }
+
+    return false;
+  });
+
+  if (!hasMeaningfulEmbed) {
+    return;
+  }
+
+  wrapper.innerHTML = "";
+
+  Array.from(source.childNodes).forEach((node) => {
+    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SCRIPT") {
+      const script = document.createElement("script");
+      Array.from(node.attributes).forEach((attribute) => {
+        script.setAttribute(attribute.name, attribute.value);
+      });
+      script.textContent = node.textContent;
+      wrapper.appendChild(script);
+      return;
+    }
+
+    wrapper.appendChild(node.cloneNode(true));
+  });
+
+  wrapper.dataset.embedMounted = "true";
+}
+
+function revealResultScreen(source) {
+  if (!state.results) {
+    state = {
+      ...state,
+      results: calculateResults(state.answers),
+    };
+  }
+
+  clearKajabiWatchers();
+  console.log(`Showing result screen after Kajabi submission (${source})`);
+
+  state = {
+    ...state,
+    stage: "result",
+  };
+  saveState();
+  trackEvent("quiz_result_viewed", {
+    primary_result: state.results.primary,
+    secondary_result: state.results.secondary,
+    severity: state.results.severity,
+    helpPriority: state.results.helpPriority,
+    source,
+  });
+  render();
+}
+
+function bindKajabiSubmissionFlow() {
+  const wrapper = document.querySelector("#kajabi-form-wrapper");
+  const form = wrapper?.querySelector("form");
+
+  if (!wrapper || !form || kajabiSubmitBound) {
+    return;
+  }
+
+  kajabiSubmitBound = true;
+  form.addEventListener("submit", () => {
+    console.log("Kajabi form submitted");
+    trackEvent("quiz_gate_submitted", finalResult || {});
+
+    kajabiResultTimeout = window.setTimeout(() => {
+      revealResultScreen("submit_delay");
+    }, KAJABI_CONFIG.submitResultDelayMs);
+  });
+
+  kajabiSuccessObserver = new MutationObserver(() => {
+    const successNode = KAJABI_CONFIG.successSelectors
+      .map((selector) => wrapper.querySelector(selector))
+      .find(Boolean);
+
+    if (successNode) {
+      revealResultScreen("success_observer");
+    }
+  });
+
+  kajabiSuccessObserver.observe(wrapper, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+  });
+}
+
+function initializeKajabiStep() {
+  const computedResult = state.results || calculateResults(state.answers);
+  finalResult = buildKajabiResultPayload(computedResult);
+  console.log("Kajabi step shown");
+  console.log("Final quiz result:", finalResult);
+
+  state = {
+    ...state,
+    results: computedResult,
+  };
+  saveState();
+
+  mountKajabiEmbed();
+  clearKajabiWatchers();
+  bindKajabiSubmissionFlow();
+
+  const wrapper = document.querySelector("#kajabi-form-wrapper");
+  if (!wrapper) {
+    console.log("Kajabi form wrapper not found");
+    return;
+  }
+
+  kajabiFieldObserver = new MutationObserver(() => {
+    bindKajabiSubmissionFlow();
+    if (tryPopulateKajabiFields(finalResult, state.lead)) {
+      stopKajabiPopulationWatchers();
+    }
+  });
+
+  kajabiFieldObserver.observe(wrapper, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+  });
+
+  kajabiPopulateInterval = window.setInterval(() => {
+    bindKajabiSubmissionFlow();
+    if (tryPopulateKajabiFields(finalResult, state.lead)) {
+      stopKajabiPopulationWatchers();
+    }
+  }, KAJABI_CONFIG.pollIntervalMs);
+
+  kajabiMaxWaitTimeout = window.setTimeout(() => {
+    if (!tryPopulateKajabiFields(finalResult, state.lead)) {
+      console.log("Kajabi fields could not be found within timeout");
+    }
+    stopKajabiPopulationWatchers();
+  }, KAJABI_CONFIG.maxWaitMs);
+}
+
+function submitVisibleLeadForm(event) {
   event.preventDefault();
 
   const firstName = state.lead.firstName.trim();
   const email = state.lead.email.trim();
-  const role = state.lead.role;
-  const consent = Boolean(state.lead.consent);
 
-  if (!firstName || !email || !consent) {
+  if (!firstName || !email) {
+    setState({ gateError: "Fyll inn navn og e-post for å se resultatet ditt." });
+    return;
+  }
+
+  const computedResult = state.results || calculateResults(state.answers);
+  finalResult = buildKajabiResultPayload(computedResult);
+
+  state = {
+    ...state,
+    gateError: "",
+    results: computedResult,
+    lead: {
+      ...state.lead,
+      firstName,
+      email,
+    },
+  };
+  saveState();
+
+  const populated = tryPopulateKajabiFields(finalResult, state.lead);
+  if (!populated) {
+    console.log("Kajabi fields not ready at visible form submit");
     setState({
-      submissionStatus: "error",
-      submissionMessage: "Fyll inn fornavn, e-post og huk av for samtykke for å se diagnosen.",
+      gateError:
+        "Skjemaet lastet ikke ferdig ennå. Vent et øyeblikk og prøv igjen.",
     });
     return;
   }
 
-  const results = calculateResults(state.answers);
-  const payload = {
-    first_name: firstName,
-    email,
-    role,
-    primary_result: results.primary,
-    secondary_result: results.secondary,
-    severity: results.severity,
-    helpPriority: results.helpPriority,
-    helpPriorityLabel: results.helpPriorityLabel,
-    helpPriorityTag: results.helpPriorityTag,
-    tags: results.tags,
-  };
-
-  state = {
-    ...state,
-    submissionStatus: "submitting",
-    submissionMessage: "",
-    results,
-  };
-  saveState();
-  render();
-
-  trackEvent("quiz_gate_submitted", payload);
-
-  try {
-    await sendSubmission(payload);
-    state = {
-      ...state,
-      submissionStatus: "success",
-      submissionMessage: "Diagnosen er sendt og klar på skjermen.",
-      stage: "result",
-    };
-    saveState();
-    trackEvent("quiz_result_viewed", {
-      primary_result: results.primary,
-      secondary_result: results.secondary,
-      severity: results.severity,
-      helpPriority: results.helpPriority,
+  const hiddenForm = document.querySelector("#kajabi-form-wrapper form");
+  if (!hiddenForm) {
+    console.log("Kajabi form not found for background submit");
+    setState({
+      gateError:
+        "Vi fant ikke innsendingen i bakgrunnen. Sjekk at Kajabi-skjemaet er lastet riktig.",
     });
-    render();
-  } catch (error) {
-    console.error(error);
-    state = {
-      ...state,
-      submissionStatus: "error",
-      submissionMessage:
-        "Vi klarte ikke å sende inn opplysningene akkurat nå. Du kan prøve igjen, eller sette opp et innsending-endepunkt i konfigurasjonen.",
-    };
-    saveState();
-    render();
-  }
-}
-
-async function sendSubmission(payload) {
-  const { submissionEndpoint, submissionHeaders } = window.QUIZ_CONFIG || {};
-  localStorage.setItem(`${STORAGE_KEY}:latest-submission`, JSON.stringify(payload));
-
-  if (!submissionEndpoint) {
-    return Promise.resolve({ ok: true, mocked: true });
+    return;
   }
 
-  const response = await fetch(submissionEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(submissionHeaders || {}),
-    },
-    body: JSON.stringify(payload),
-  });
+  console.log("Submitting Kajabi form in background");
 
-  if (!response.ok) {
-    throw new Error(`Submission failed with status ${response.status}`);
+  if (typeof hiddenForm.requestSubmit === "function") {
+    hiddenForm.requestSubmit();
+  } else {
+    hiddenForm.submit();
   }
-
-  return response;
 }
 
 function trackEvent(name, payload = {}) {
@@ -838,57 +1102,46 @@ function renderGate() {
             <p class="gate-intro">
               Legg inn navn og e-post, så sender jeg deg resultatet ditt med en kort forklaring på hva som sannsynligvis preger teamet ditt akkurat nå.
             </p>
+            <p class="gate-intro">
+              Du får også relevante oppfølginger knyttet til utfordringen quizen peker på.
+            </p>
           </div>
 
-          <form class="form-grid" data-form="lead-gate">
+          <form class="form-grid" data-form="visible-lead-gate">
             <div class="field">
-              <label for="firstName">Fornavn</label>
-              <input id="firstName" name="firstName" type="text" autocomplete="given-name" value="${escapeHtml(
+              <label for="visibleFirstName">Navn</label>
+              <input id="visibleFirstName" name="visibleFirstName" type="text" autocomplete="name" value="${escapeHtml(
                 state.lead.firstName
               )}" />
             </div>
 
             <div class="field">
-              <label for="email">E-post</label>
-              <input id="email" name="email" type="email" autocomplete="email" value="${escapeHtml(state.lead.email)}" />
+              <label for="visibleEmail">E-post</label>
+              <input id="visibleEmail" name="visibleEmail" type="email" autocomplete="email" value="${escapeHtml(
+                state.lead.email
+              )}" />
             </div>
 
-            <div class="field">
-              <label for="role">Rolle (valgfritt)</label>
-              <select id="role" name="role">
-                <option value="" ${state.lead.role === "" ? "selected" : ""}>Velg rolle</option>
-                <option value="Senior leder" ${state.lead.role === "Senior leder" ? "selected" : ""}>Senior leder</option>
-                <option value="Mellomleder" ${state.lead.role === "Mellomleder" ? "selected" : ""}>Mellomleder</option>
-                <option value="Annet" ${state.lead.role === "Annet" ? "selected" : ""}>Annet</option>
-              </select>
-            </div>
-
-            <label class="consent" for="consent">
-              <input id="consent" name="consent" type="checkbox" ${state.lead.consent ? "checked" : ""} />
-              <p>Jeg godtar å motta resultatet mitt og relevante e-poster om ledelse, samarbeid og skjulte dynamikker i team.</p>
-            </label>
-
-            ${
-              state.submissionStatus === "error"
-                ? `<p class="error-text">${state.submissionMessage}</p>`
-                : ""
-            }
-            ${
-              state.submissionStatus === "success"
-                ? `<p class="success-text">${state.submissionMessage}</p>`
-                : ""
-            }
+            ${state.gateError ? `<p class="error-text">${state.gateError}</p>` : ""}
 
             <div class="button-row">
-              <button class="button" type="submit" ${state.submissionStatus === "submitting" ? "disabled" : ""}>
-                ${state.submissionStatus === "submitting" ? "Beregner..." : "Se resultatet mitt"}
-              </button>
+              <button class="button" type="submit">Se resultatet mitt</button>
             </div>
           </form>
+        </div>
+
+        <div id="kajabi-step" class="kajabi-background-host" aria-hidden="true">
+          <div id="kajabi-form-wrapper" class="kajabi-form-wrapper">
+            <div class="kajabi-placeholder">
+              <p>Lim inn Kajabi embed-koden i <code>#kajabi-embed-source</code> i <code>index.html</code>.</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
   `;
+
+  initializeKajabiStep();
 }
 
 function renderResult() {
@@ -897,6 +1150,8 @@ function renderResult() {
   const secondaryLabel = PATTERN_LABELS[results.secondary];
   const blended = SECONDARY_SNIPPETS[results.primary][results.secondary] || "";
   const helpPriorityMeta = HELP_PRIORITY_META[results.helpPriority];
+  const ctaText =
+    "Hvis du kjenner igjen dette bildet, kan det være nyttig å se nærmere på hva som faktisk skjer under overflaten i teamet ditt.";
 
   app.innerHTML = `
     <section class="result-layout">
@@ -955,14 +1210,12 @@ function renderResult() {
             : ""
         }
 
+        <p class="cta-support">${ctaText}</p>
         <div class="button-row">
-          <button class="button" data-action="book-call">Book en samtale</button>
+          <a class="button" data-action="book-call" href="${BOOKING_URL}" target="_blank" rel="noreferrer noopener">Book en samtale</a>
           <button class="ghost-button" data-action="restart-quiz">Ta quizen for et annet team</button>
         </div>
-        <p class="cta-support">${
-          helpPriorityMeta?.ctaSupport ||
-          "Hvis du kjenner igjen dette bildet, kan det være nyttig å se nærmere på hva som faktisk skjer under overflaten i teamet ditt."
-        }</p>
+        <p class="cta-support">25 min – uforpliktende samtale</p>
       </div>
     </section>
   `;
@@ -993,29 +1246,21 @@ function wireEvents() {
         primary_result: state.results?.primary,
         secondary_result: state.results?.secondary,
       });
-      const bookingUrl = window.QUIZ_CONFIG?.bookingUrl;
-      window.location.href = bookingUrl || "mailto:hello@example.com?subject=Book%20en%20samtale";
     });
   });
 
-  const leadForm = document.querySelector("[data-form='lead-gate']");
-  if (leadForm) {
-    leadForm.addEventListener("submit", submitLeadForm);
+  const visibleLeadForm = document.querySelector("[data-form='visible-lead-gate']");
+  if (visibleLeadForm) {
+    visibleLeadForm.addEventListener("submit", submitVisibleLeadForm);
 
-    leadForm.querySelector("#firstName")?.addEventListener("input", (event) => {
+    visibleLeadForm.querySelector("#visibleFirstName")?.addEventListener("input", (event) => {
       updateLead({ firstName: event.target.value });
+      clearGateError();
     });
 
-    leadForm.querySelector("#email")?.addEventListener("input", (event) => {
+    visibleLeadForm.querySelector("#visibleEmail")?.addEventListener("input", (event) => {
       updateLead({ email: event.target.value });
-    });
-
-    leadForm.querySelector("#role")?.addEventListener("change", (event) => {
-      updateLead({ role: event.target.value });
-    });
-
-    leadForm.querySelector("#consent")?.addEventListener("change", (event) => {
-      updateLead({ consent: event.target.checked });
+      clearGateError();
     });
   }
 }
