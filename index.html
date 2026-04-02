@@ -20,17 +20,21 @@
   </head>
   <body>
     <div class="page-shell">
+      <div class="language-toggle" aria-label="Language toggle">
+        <button data-lang="no" type="button" class="lang-btn" aria-label="Norwegian" title="Norwegian">🇳🇴</button>
+        <button data-lang="en" type="button" class="lang-btn" aria-label="English" title="English">🇬🇧</button>
+      </div>
       <div class="ambient ambient-left"></div>
       <div class="ambient ambient-right"></div>
       <main id="app" class="app" aria-live="polite"></main>
       <div id="kajabi-step" class="quiz-step hidden">
         <div class="kajabi-step-content panel">
           <div class="kajabi-copy">
-            <h2 class="question-title">Vil du se diagnosen din?</h2>
-            <p>
+            <h2 id="kajabi-step-title" class="question-title">Vil du se diagnosen din?</h2>
+            <p id="kajabi-step-body">
               Legg inn navn og e-post, så sender jeg deg resultatet ditt – med en kort forklaring på hva som sannsynligvis preger teamet ditt akkurat nå.
             </p>
-            <p class="kajabi-support">
+            <p id="kajabi-step-support" class="kajabi-support">
               Du får også relevante oppfølginger knyttet til utfordringen quizen peker på.
             </p>
           </div>
@@ -38,15 +42,15 @@
           <div class="kajabi-visible-form">
             <form id="visible-lead-form" class="visible-lead-form" novalidate>
               <div class="visible-field">
-                <label for="visible-name">Navn</label>
+                <label id="visible-name-label" for="visible-name">Navn</label>
                 <input id="visible-name" name="visible_name" type="text" autocomplete="name" />
               </div>
               <div class="visible-field">
-                <label for="visible-email">E-post</label>
+                <label id="visible-email-label" for="visible-email">E-post</label>
                 <input id="visible-email" name="visible_email" type="email" autocomplete="email" />
               </div>
               <p id="visible-form-error" class="visible-form-error hidden"></p>
-              <button type="submit" class="button">Se resultatet mitt</button>
+              <button id="visible-form-submit" type="submit" class="button">Se resultatet mitt</button>
             </form>
           </div>
 

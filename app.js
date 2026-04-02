@@ -2,6 +2,7 @@ const STORAGE_KEY = "team-surface-quiz-state-v1";
 const PATTERNS = ["VOICE", "TRUTH", "RESIST", "BELONG", "POWER"];
 const BOOKING_URL = "https://calendar.app.google/ur7kRpTwqy6FjUnD7";
 const GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbwy_FY1ou2kSo-D-u9gTtsBYbfJtiPX3F-q7z0PQHJOfZuI97JfusH9E0VTQNTDtup0/exec";
+let currentLanguage = localStorage.getItem("quiz_lang") || "no";
 const KAJABI_CONFIG = {
   fieldNames: {
     firstName: ["form_submission[name]", "first_name", "name", "contact[first_name]"],
@@ -22,6 +23,7 @@ const KAJABI_CONFIG = {
       "form_submission[custom_13]",
       "help_priority",
     ],
+    language: ["language", "form_submission[language]"],
   },
   pollIntervalMs: 300,
   maxWaitMs: 10000,
@@ -53,6 +55,134 @@ const PATTERN_LABELS = {
   POWER: "Uformelle maktstrukturer",
 };
 
+const PATTERN_LABELS_EN = {
+  VOICE: "Uneven voice and participation",
+  TRUTH: "Avoidance of uncomfortable truths",
+  RESIST: "Hidden resistance",
+  BELONG: "Inclusion and exclusion dynamics",
+  POWER: "Informal power structures",
+};
+
+const UI_NO = {
+  startQuiz: "Start quizen",
+  resumeQuiz: "Fortsett der du slapp",
+  quizLabel: "Teamdiagnose",
+  landingTitle: "Hva skjer under overflaten i teamet ditt?",
+  landingSubtitle:
+    "Mange team beskriver utfordringene sine som kommunikasjonsproblemer. Ofte er det noe mer. Denne quizen hjelper deg å se hvilke skjulte mønstre som påvirker beslutninger, samarbeid og fremdrift i teamet ditt.",
+  supportDuration: "Tar 3–4 minutter.",
+  supportEmail: "Du får en kort diagnose på skjermen, og resultatet sendt på e-post.",
+  metricOneTitle: "Fem skjulte mønstre",
+  metricOneBody: "VOICE, TRUTH, RESIST, BELONG og POWER oversatt til konkrete signaler i teamhverdagen.",
+  metricTwoTitle: "Bygget for ledere",
+  metricTwoBody: "Et rolig, presist og profesjonelt verktøy for seniorledere og mellomledere som vil se klarere.",
+  metricThreeTitle: "Diagnostiserer teamet",
+  metricThreeBody: "Resultatet beskriver miljøet og dynamikken i teamet, ikke personligheten til den som svarer.",
+  questionLabel: "Teammønster",
+  questionCount: "Spørsmål {current} av {total}",
+  back: "Tilbake",
+  resultLabel: "Resultat",
+  dominantPattern: "Dominant pattern",
+  secondaryPattern: "Secondary pattern",
+  severity: "Severity",
+  helpNeed: "Hjelpebehov",
+  framingText:
+    "Alle team har mønstre. Denne diagnosen viser hva som er mest aktivt hos dere akkurat nå – enten som tidlige signaler eller mer etablerte utfordringer.",
+  balanceText:
+    "Dette betyr ikke at teamet ditt “er slik”, men at dette er mønstre som ser ut til å være mer aktive akkurat nå.",
+  lowPositive:
+    "Dette er ofte et godt tidspunkt å bli bevisst på mønstrene – før de setter seg sterkere i måten teamet jobber på.",
+  showsAs: "Dette viser seg ofte som",
+  under: "Det som ofte ligger under",
+  nextStep: "Et nyttig neste steg for en leder",
+  shortDiagnosis: "Kort diagnose",
+  helpPriorityTitle: "Det du sannsynligvis trenger mest akkurat nå",
+  restart: "Ta quizen på nytt",
+  restartOtherTeam: "Ta quizen på nytt for et annet team",
+  callLength: "25 min – uforpliktende samtale",
+  kajabiTitle: "Vil du se diagnosen din?",
+  kajabiBody:
+    "Legg inn navn og e-post, så sender jeg deg resultatet ditt – med en kort forklaring på hva som sannsynligvis preger teamet ditt akkurat nå.",
+  kajabiSupport:
+    "Du får også relevante oppfølginger knyttet til utfordringen quizen peker på.",
+  nameLabel: "Navn",
+  emailLabel: "E-post",
+  visibleSubmit: "Se resultatet mitt",
+  errors: {
+    required: "Fyll inn navn og e-post for å se resultatet ditt.",
+    loading: "Skjemaet lastet ikke ferdig ennå. Vent et øyeblikk og prøv igjen.",
+  },
+};
+
+const UI_EN = {
+  eyebrow: "Team diagnostic",
+  startQuiz: "Start quiz",
+  resumeQuiz: "Continue where you left off",
+  quizLabel: "Team diagnostic",
+  landingTitle: "What is happening beneath the surface in your team?",
+  landingSubtitle:
+    "Many teams describe their challenges as communication problems. Often, it is something more. This quiz helps you see which hidden patterns may be affecting decisions, collaboration, and momentum in your team.",
+  landingSupport1: "Takes 3–4 minutes.",
+  landingSupport2: "You’ll see a short diagnosis on screen, and receive the result by email.",
+  supportDuration: "Takes 3–4 minutes.",
+  supportEmail: "You’ll see a short diagnosis on screen, and receive the result by email.",
+  metricOneTitle: "Five hidden patterns",
+  metricOneBody: "VOICE, TRUTH, RESIST, BELONG, and POWER translated into concrete signals in everyday team life.",
+  metricTwoTitle: "Built for leaders",
+  metricTwoBody: "A calm, precise, and professional tool for senior leaders and middle managers who want greater clarity.",
+  metricThreeTitle: "Diagnoses the team",
+  metricThreeBody: "The result describes the environment and dynamics in the team, not the personality of the person answering.",
+  questionMeta: (current, total) => `Question ${current} of ${total}`,
+  questionLabel: (id) => `${id} Team pattern`,
+  questionCount: "Question {current} of {total}",
+  back: "Back",
+  gateTitle: "Would you like to see your diagnosis?",
+  gateBody:
+    "Enter your name and email, and I’ll send your result with a short explanation of what may be shaping your team right now.",
+  gateSupport:
+    "You’ll also receive a few relevant follow-ups related to the challenge your quiz points to.",
+  kajabiTitle: "Would you like to see your diagnosis?",
+  kajabiBody:
+    "Enter your name and email, and I’ll send your result with a short explanation of what may be shaping your team right now.",
+  kajabiSupport:
+    "You’ll also receive a few relevant follow-ups related to the challenge your quiz points to.",
+  resultLabel: "Result",
+  resultTitlePrefix: "Team diagnosis",
+  dominantPattern: "Dominant pattern",
+  secondaryPattern: "Secondary pattern",
+  severity: "Severity",
+  helpNeed: "Need right now",
+  framing:
+    "All teams have patterns. This diagnosis highlights what seems to be most active in your team right now — whether as early signals or more established dynamics.",
+  framingText:
+    "All teams have patterns. This diagnosis highlights what seems to be most active in your team right now — whether as early signals or more established dynamics.",
+  balance:
+    "This does not mean your team 'is like this', but that these patterns appear to be more present right now.",
+  balanceText:
+    "This does not mean your team 'is like this', but that these patterns appear to be more present right now.",
+  showsAs: "This often shows up as",
+  whatLiesUnder: "What often sits underneath",
+  under: "What often sits underneath",
+  nextStep: "A useful next step for a leader",
+  shortDiagnosis: "Short diagnosis",
+  whatYouNeedMost: "What you are most likely to need right now",
+  helpPriorityTitle: "What you are most likely to need right now",
+  lowPositive:
+    "This is often the best time to become more conscious of the pattern — before it becomes more deeply embedded in how the team works.",
+  restart: "Take the quiz again",
+  retake: "Retake quiz for another team",
+  restartOtherTeam: "Retake quiz for another team",
+  ctaBookingSub: "25 min – no obligation",
+  callLength: "25 min – no obligation",
+  nameLabel: "Name",
+  emailLabel: "Email",
+  visibleSubmit: "See my result",
+  errors: {
+    required: "Enter your name and email to see your result.",
+    loading: "The form is still loading. Please wait a moment and try again.",
+  },
+};
+
 const CTA_BY_SEVERITY = {
   LOW: {
     text: "Hvis du er nysgjerrig på hva dette kan utvikle seg til – og hvordan du kan jobbe mer bevisst med det – kan vi ta en rolig samtale.",
@@ -65,6 +195,21 @@ const CTA_BY_SEVERITY = {
   HIGH: {
     text: "Når dette får virke over tid, påvirker det ofte både beslutninger, fremdrift og tillit. Det er mulig å gjøre noe med det – men det starter med å se det tydelig.",
     button: "Ta tak i dette",
+  },
+};
+
+const CTA_BY_SEVERITY_EN = {
+  LOW: {
+    text: "If you're curious about what this could develop into – and how you can work with it more consciously – we can have a calm conversation.",
+    button: "Explore this further",
+  },
+  MEDIUM: {
+    text: "If this is affecting collaboration and momentum in your team, it may be useful to look more closely at what is actually driving it – and what you can concretely do.",
+    button: "Look at this together",
+  },
+  HIGH: {
+    text: "When this is allowed to continue over time, it often affects decisions, momentum, and trust. Something can be done about it – but it starts with seeing it clearly.",
+    button: "Address this now",
   },
 };
 
@@ -92,6 +237,33 @@ const HELP_PRIORITY_META = {
     tag: "goal_collaboration",
     resultCopy:
       "Å skape tydeligere samarbeid, ansvar og felles retning. Når roller, forventninger og beslutningsgrenser blir tydeligere, blir det også lettere å jobbe sammen på en god måte.",
+  },
+};
+
+const HELP_PRIORITY_META_EN = {
+  understand: {
+    label: "Understanding what is actually going on",
+    tag: "goal_understand",
+    resultCopy:
+      "What you are most likely to need right now is a clearer picture of what is actually happening in the team — before trying to solve it. When the underlying patterns become clearer, it also becomes easier to know where to focus.",
+  },
+  progress: {
+    label: "Creating better momentum",
+    tag: "goal_progress",
+    resultCopy:
+      "What you are most likely to need right now is better momentum without simply pushing harder. When teams stall, it is often less about capacity and more about what remains unclear or unspoken.",
+  },
+  dynamics: {
+    label: "Handling difficult team dynamics",
+    tag: "goal_dynamics",
+    resultCopy:
+      "What you are most likely to need right now is a way to understand and work with the difficult dynamics in the team in a way that creates more safety and less friction. That often starts by making the patterns visible.",
+  },
+  collaboration: {
+    label: "Creating clearer collaboration and accountability",
+    tag: "goal_collaboration",
+    resultCopy:
+      "What you are most likely to need right now is clearer collaboration, accountability, and shared direction. When roles, expectations, and decision boundaries become clearer, it becomes easier to work together well.",
   },
 };
 
@@ -168,6 +340,79 @@ const RESULT_CONTENT = {
   },
 };
 
+const RESULT_CONTENT_EN = {
+  VOICE: {
+    title: "Your team environment is shaped by uneven voice and participation",
+    diagnostic:
+      "In your team, it appears that some voices carry more weight than others. This affects more than who speaks — it shapes which perspectives are heard, which questions are asked, and what feels possible to say out loud.",
+    showsAs: [
+      "the same people speaking most of the time",
+      "disagreement being held back",
+      "important input arriving too late — or not at all",
+    ],
+    under:
+      "This is rarely just about strong personalities. More often, it reflects how conversations are structured, how participation is framed, or how safe it feels to challenge what is already dominating.",
+    nextStep:
+      "Look closely at how conversations actually unfold. Who speaks first? Who sums up? Who is not actively invited in?",
+  },
+  TRUTH: {
+    title: "Your team environment is shaped by avoidance of uncomfortable truths",
+    diagnostic:
+      "In your team, it appears that what is difficult is often made more technical, more vague, or pushed further down the road. That can create an impression of progress, while delaying the conversations that actually matter.",
+    showsAs: [
+      "analysis and detail taking over when decisions are close",
+      "the conversation drifting away from the core issue",
+      "people talking around the problem more than about it",
+    ],
+    under:
+      "This often happens when the cost of honesty feels high. Vagueness, postponement, and detours become ways of managing uncertainty.",
+    nextStep:
+      "Try clarifying what the team is actually being asked to face. What is the question you may be avoiding together?",
+  },
+  RESIST: {
+    title: "Your team environment is shaped by hidden resistance",
+    diagnostic:
+      "In your team, agreement does not always seem to translate into real commitment. Things may look aligned in the room, but lose momentum afterwards. That creates drag, repeated conversations, and unclear progress.",
+    showsAs: [
+      "people saying yes without following through",
+      "decisions having to be revisited",
+      "progress slowing without clear opposition",
+    ],
+    under:
+      "This is rarely about laziness or lack of will. More often, it reflects unspoken concerns, competing priorities, or low safety to say no directly.",
+    nextStep:
+      "Look at how commitment is clarified. Is it clear what has actually been decided, who owns what, and what remains unspoken?",
+  },
+  BELONG: {
+    title: "Your team environment is shaped by inclusion and exclusion dynamics",
+    diagnostic:
+      "In your team, social position and recognition may be influencing collaboration more than they should. Some contributions receive less response, some people are more easily left on the outside, and not everyone experiences their voice as carrying equal weight.",
+    showsAs: [
+      "ideas being overlooked or picked up by others",
+      "certain people being met with silence",
+      "it feeling safer for some people to contribute than for others",
+    ],
+    under:
+      "This is often a sign of status differences, low safety, or unexamined patterns around who receives recognition and space.",
+    nextStep:
+      "Notice what actually happens in the room when people contribute. Who is met? Who is left hanging? And what does the team learn from that over time?",
+  },
+  POWER: {
+    title: "Your team environment is shaped by informal power structures",
+    diagnostic:
+      "In your team, influence does not seem to follow formal roles alone. Certain relationships, alliances, or information lines appear to shape more than is visible in the official structure.",
+    showsAs: [
+      "decisions seeming made before the meeting starts",
+      "some people consistently knowing more than others",
+      "collaboration being shaped by proximity and alliances",
+    ],
+    under:
+      "This often happens when roles, decision boundaries, or the flow of information are unclear. In that space, informal structures gain influence.",
+    nextStep:
+      "Look at where decisions are really being shaped. Is it happening in the formal room — or somewhere else?",
+  },
+};
+
 const SECONDARY_SNIPPETS = {
   VOICE: {
     TRUTH:
@@ -221,12 +466,74 @@ const SECONDARY_SNIPPETS = {
   },
 };
 
+const SECONDARY_SNIPPETS_EN = {
+  VOICE: {
+    TRUTH:
+      "Your answers also suggest that what is difficult is often softened or worked around — not just dominated. That means both who gets space in the room and what can actually be said are part of the picture.",
+    RESIST:
+      "Your answers also suggest that weak follow-through is not only about who gets space, but also about agreement not becoming real commitment.",
+    BELONG:
+      "There are also signs that this affects who feels included, heard, and safe enough to contribute.",
+    POWER:
+      "Your answers also suggest that some voices carry weight not only because of style, but because they sit close to informal influence.",
+  },
+  TRUTH: {
+    VOICE:
+      "Your answers also suggest that who gets space in the conversation affects which truths make it into the room.",
+    RESIST:
+      "There are also signs that what is not said clearly enough later shows up as drag or lack of follow-through.",
+    BELONG:
+      "It may also be that not everyone feels equally safe to raise what is difficult.",
+    POWER:
+      "Your answers also suggest that some topics are shaped as much by power and relationships as by facts.",
+  },
+  RESIST: {
+    VOICE:
+      "It may also be that certain voices shape the direction more than others, making real commitment harder to build across the whole team.",
+    TRUTH:
+      "Your answers also suggest that there are things not being said clearly enough, which later reappear as drag or slippage.",
+    BELONG:
+      "Hidden resistance may also be connected to some people not feeling equally safe or equal in the collaboration.",
+    POWER:
+      "There are also signs that informal influence affects what is actually followed up after decisions.",
+  },
+  BELONG: {
+    VOICE:
+      "Your answers also suggest that space in conversations is unevenly distributed, which reinforces who feels inside and outside.",
+    TRUTH:
+      "A lack of safety may also make it harder to say what is actually true or important.",
+    RESIST:
+      "There are also signs that what does not get room in the relationships later shows up as low commitment or weak follow-through.",
+    POWER:
+      "Your answers also suggest that social position and informal influence are closely linked in this team.",
+  },
+  POWER: {
+    VOICE:
+      "It may also be that informal influence shapes who gets most space in the room.",
+    TRUTH:
+      "Your answers also suggest that some truths are harder to raise because the power around them is unclear.",
+    RESIST:
+      "There are also signs that informal structures influence what is actually followed up after decisions.",
+    BELONG:
+      "These structures may also be affecting who feels they belong — and who is left slightly outside.",
+  },
+};
+
 const SEVERITY_COPY = {
   LOW: "Dette ser foreløpig ut som et tidlig signal, mer enn et tydelig problem. Det betyr at det er noe her som er verdt å være bevisst på – før det får utvikle seg til noe som påvirker samarbeid og fremdrift sterkere.",
   MEDIUM:
     "Dette ser ut til å være tydelig nok til at det påvirker samarbeid og fremdrift i praksis. Det betyr ikke at teamet mangler vilje eller kompetanse, men at noen underliggende forhold gjør arbeidet tyngre enn det trenger å være.",
   HIGH:
     "Dette ser ut til å være et etablert mønster som påvirker både samarbeid, beslutninger og fremdrift. Når slike mønstre får virke over tid, koster det ofte mer enn man tror – både i energi og i kvaliteten på arbeidet.",
+};
+
+const SEVERITY_COPY_EN = {
+  LOW:
+    "This currently looks more like an early signal than a clear problem. That means there is something here worth becoming conscious of — before it develops into something that more clearly affects collaboration and momentum.",
+  MEDIUM:
+    "This appears to be strong enough to affect collaboration and momentum in practice. That does not mean the team lacks capability or goodwill, but that underlying conditions are making the work heavier than it needs to be.",
+  HIGH:
+    "This looks like an established pattern that is likely affecting trust, decisions, and follow-through. When patterns like this are left to run over time, they usually cost more than expected — not only in energy, but in the quality of the work and the team’s ability to move together.",
 };
 
 const QUESTIONS = [
@@ -412,6 +719,216 @@ const QUESTIONS = [
   },
 ];
 
+const QUESTIONS_EN = [
+  {
+    id: "Q1",
+    prompt: "When an important decision is being made in your team, what most often happens?",
+    options: {
+      A: "The right people are involved, and the decision becomes clear",
+      B: "A few voices tend to take up most of the space",
+      C: "The discussion is broad, but what has actually been decided remains unclear",
+      D: "The decision seems to have been made before the meeting starts",
+    },
+  },
+  {
+    id: "Q2",
+    prompt: "What most often happens after the team has agreed on something important?",
+    options: {
+      A: "Things mostly move forward as expected",
+      B: "Progress slows without anyone clearly saying no",
+      C: "The decision gets reopened later",
+      D: "People seem aligned in the room, but act differently afterwards",
+    },
+  },
+  {
+    id: "Q3",
+    prompt: "How would you describe your team meetings?",
+    options: {
+      A: "Generally clear and useful",
+      B: "The same people tend to speak most of the time",
+      C: "There is a lot of discussion, but it drifts away from what matters most",
+      D: "It is difficult to say what you really think",
+    },
+  },
+  {
+    id: "Q4",
+    prompt: "What usually happens when someone raises a difficult or uncomfortable issue?",
+    options: {
+      A: "It is usually addressed fairly directly",
+      B: "The conversation quickly becomes more technical or vague",
+      C: "The topic gets pushed to a later point",
+      D: "The person who raised it seems to lose some space in the room",
+    },
+  },
+  {
+    id: "Q5",
+    prompt: "Which of these best reflects everyday life in your team?",
+    options: {
+      A: "Ideas are mostly judged on their merits",
+      B: "Some ideas are only taken seriously when the 'right' person says them",
+      C: "Certain people are often overlooked or met with silence",
+      D: "There are informal alliances that shape quite a lot",
+    },
+  },
+  {
+    id: "Q6",
+    prompt: "When progress slows down, what do you most often see?",
+    options: {
+      A: "Priorities shift",
+      B: "Approvals or responses get delayed",
+      C: "New questions and analysis suddenly appear",
+      D: "No one explicitly stops things, yet very little actually moves",
+    },
+  },
+  {
+    id: "Q7",
+    prompt: "How would you describe the flow of information in and around the team?",
+    options: {
+      A: "Relatively open and clear",
+      B: "Important information reaches some people late",
+      C: "Different people present different versions of the same situation",
+      D: "It feels as if some people always know more than others",
+    },
+  },
+  {
+    id: "Q8",
+    prompt: "What most often happens with ownership and responsibility?",
+    options: {
+      A: "Ownership and responsibility are fairly clear",
+      B: "Several people assume someone else owns the task",
+      C: "Responsibility tends to drift upwards",
+      D: "Responsibility becomes unclear when things get difficult or sensitive",
+    },
+  },
+  {
+    id: "Q9",
+    prompt: "How do people in the team usually respond when they disagree?",
+    options: {
+      A: "They say so fairly openly",
+      B: "They are cautious in the room and clearer afterwards",
+      C: "They hold back because certain people dominate",
+      D: "They avoid saying it directly",
+    },
+  },
+  {
+    id: "Q10",
+    prompt: "What best characterises the culture in your team right now?",
+    options: {
+      A: "Collaboration and clarity",
+      B: "Fatigue and short-term thinking",
+      C: "Caution and underlying tension",
+      D: "Multiple parallel agendas",
+    },
+  },
+  {
+    id: "Q11",
+    prompt: "What feels like the biggest cost of this right now?",
+    options: {
+      A: "Slow progress",
+      B: "Poorer decisions",
+      C: "Lower trust",
+      D: "More energy goes into navigating than creating value",
+    },
+  },
+  {
+    id: "Q12",
+    prompt: "Where is this most noticeable?",
+    options: {
+      A: "In leadership meetings or decision forums",
+      B: "In collaboration across teams or functions",
+      C: "In what happens after decisions have been made",
+      D: "In who is heard and who is left on the outside",
+    },
+  },
+  {
+    id: "Q13",
+    prompt: "If you had to describe it in one phrase, which fits best?",
+    options: {
+      A: "We need more direction",
+      B: "We say yes, but execution slips",
+      C: "There are things that are not being said out loud",
+      D: "Some people have more influence than is visible",
+    },
+  },
+  {
+    id: "Q14",
+    prompt: "How would you describe the situation in your team right now?",
+    options: {
+      A: "More of an early signal than a real obstacle",
+      B: "It is starting to affect collaboration noticeably",
+      C: "It is clearly affecting decisions and progress",
+      D: "It is having visible consequences for trust, results, or culture",
+    },
+  },
+  {
+    id: "Q15",
+    prompt: "What do you most need help with right now?",
+    options: {
+      A: "Understanding what is actually going on",
+      B: "Creating better momentum",
+      C: "Handling difficult team dynamics",
+      D: "Creating clearer collaboration and accountability",
+    },
+  },
+];
+
+function getQuestions() {
+  return QUESTIONS;
+}
+
+function getQuestionsContent() {
+  return currentLanguage === "en" ? QUESTIONS_EN : null;
+}
+
+function getTranslatedQuestion(question) {
+  const translations = getQuestionsContent();
+  if (!translations) {
+    return question;
+  }
+
+  const translated = translations.find((item) => item.id === question.id);
+  if (!translated) {
+    return question;
+  }
+
+  return {
+    ...question,
+    prompt: translated.prompt || question.prompt,
+    options: question.options.map((option) => ({
+      ...option,
+      text: translated.options?.[option.key] || option.text,
+    })),
+  };
+}
+
+function getUI() {
+  return currentLanguage === "no" ? UI_NO : UI_EN;
+}
+
+function getResults() {
+  return currentLanguage === "no" ? RESULT_CONTENT : RESULT_CONTENT_EN;
+}
+
+function getPatternLabels() {
+  return currentLanguage === "no" ? PATTERN_LABELS : PATTERN_LABELS_EN;
+}
+
+function getSecondarySnippets() {
+  return currentLanguage === "no" ? SECONDARY_SNIPPETS : SECONDARY_SNIPPETS_EN;
+}
+
+function getSeverityCopy() {
+  return currentLanguage === "no" ? SEVERITY_COPY : SEVERITY_COPY_EN;
+}
+
+function getSeverityCTA() {
+  return currentLanguage === "no" ? CTA_BY_SEVERITY : CTA_BY_SEVERITY_EN;
+}
+
+function getHelpPriorityMeta() {
+  return currentLanguage === "no" ? HELP_PRIORITY_META : HELP_PRIORITY_META_EN;
+}
+
 const defaultState = {
   stage: "landing",
   currentQuestionIndex: 0,
@@ -436,7 +953,62 @@ let visibleLeadBound = false;
 let pendingLeadSubmission = null;
 let googleSheetsSent = false;
 
+bindLanguageToggle();
 render();
+
+function bindLanguageToggle() {
+  document.querySelectorAll("[data-lang]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      currentLanguage = btn.dataset.lang;
+      localStorage.setItem("quiz_lang", currentLanguage);
+      syncLanguageToggle();
+      applyStaticTranslations();
+      render();
+    });
+  });
+  syncLanguageToggle();
+}
+
+function syncLanguageToggle() {
+  document.documentElement.lang = currentLanguage === "no" ? "no" : "en";
+  document.querySelectorAll("[data-lang]").forEach((btn) => {
+    const isActive = btn.dataset.lang === currentLanguage;
+    btn.setAttribute("aria-pressed", String(isActive));
+    btn.classList.toggle("active", isActive);
+    btn.disabled = isActive;
+  });
+}
+
+function applyStaticTranslations() {
+  const ui = getUI();
+
+  const copyTargets = [
+    ["#kajabi-step-title", ui.gateTitle || ui.kajabiTitle],
+    ["#kajabi-step-body", ui.gateBody || ui.kajabiBody],
+    ["#kajabi-step-support", ui.gateSupport || ui.kajabiSupport],
+    ["#visible-name-label", ui.nameLabel],
+    ["#visible-email-label", ui.emailLabel],
+    ["#visible-form-submit", ui.visibleSubmit],
+  ];
+
+  copyTargets.forEach(([selector, text]) => {
+    const node = document.querySelector(selector);
+    if (node) {
+      node.textContent = text;
+    }
+  });
+
+  const nameInput = document.querySelector("#visible-name");
+  const emailInput = document.querySelector("#visible-email");
+
+  if (nameInput) {
+    nameInput.setAttribute("placeholder", ui.nameLabel);
+  }
+
+  if (emailInput) {
+    emailInput.setAttribute("placeholder", ui.emailLabel);
+  }
+}
 
 function loadState() {
   try {
@@ -514,9 +1086,10 @@ function answerQuestion(questionId, optionKey) {
   });
 
   if (questionId === "Q15" && selectedOption?.helpPriority) {
+    const helpPriorityMeta = getHelpPriorityMeta();
     trackEvent("quiz_help_priority_selected", {
       selected_value: selectedOption.helpPriority,
-      selected_label: HELP_PRIORITY_META[selectedOption.helpPriority]?.label || selectedOption.text,
+      selected_label: helpPriorityMeta[selectedOption.helpPriority]?.label || selectedOption.text,
     });
   }
 
@@ -555,7 +1128,7 @@ function startQuiz() {
 }
 
 function getQuestionById(questionId) {
-  return QUESTIONS.find((question) => question.id === questionId);
+  return getQuestions().find((question) => question.id === questionId);
 }
 
 function calculateResults(answers) {
@@ -602,7 +1175,7 @@ function calculateResults(answers) {
   );
   const primary = rankedPatterns[0];
   const secondary = rankedPatterns[1] || primary;
-  const helpMeta = HELP_PRIORITY_META[helpPriority] || null;
+  const helpMeta = getHelpPriorityMeta()[helpPriority] || null;
 
   return {
     primary,
@@ -668,6 +1241,7 @@ function sendToGoogleSheets(result) {
     secondary: result.secondaryResult,
     severity: result.severity,
     helpPriority: result.helpPriority,
+    language: currentLanguage,
     timestamp: new Date().toISOString(),
   };
 
@@ -710,6 +1284,7 @@ function hideKajabiCustomFields() {
     KAJABI_CONFIG.fieldNames.secondary,
     KAJABI_CONFIG.fieldNames.severity,
     KAJABI_CONFIG.fieldNames.helpPriority,
+    KAJABI_CONFIG.fieldNames.language,
   ];
 
   let hiddenAny = false;
@@ -765,6 +1340,7 @@ function populateKajabiFields(result) {
   const secondaryField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.secondary);
   const severityField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.severity);
   const helpPriorityField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.helpPriority);
+  const languageField = getKajabiFieldByNames(KAJABI_CONFIG.fieldNames.language);
 
   if (!primaryField || !secondaryField || !severityField || !helpPriorityField) {
     return false;
@@ -774,8 +1350,11 @@ function populateKajabiFields(result) {
   setFieldValue(secondaryField, result.secondaryResult);
   setFieldValue(severityField, result.severity);
   setFieldValue(helpPriorityField, result.helpPriority);
+  if (languageField) {
+    setFieldValue(languageField, currentLanguage);
+  }
   console.log("Kajabi fields populated");
-  console.log("Populating Kajabi with:", result);
+  console.log("Populating Kajabi with:", { ...result, language: currentLanguage });
   return true;
 }
 
@@ -883,7 +1462,7 @@ function submitVisibleLeadForm(event) {
   const emailValue = emailInput?.value.trim() || "";
 
   if (!nameValue || !emailValue) {
-    showVisibleFormError("Fyll inn navn og e-post for å se resultatet ditt.");
+    showVisibleFormError(getUI().errors.required);
     return;
   }
 
@@ -898,7 +1477,7 @@ function submitVisibleLeadForm(event) {
 
   if (!firstNameField || !emailField || !hiddenForm) {
     console.log("Kajabi form not ready yet, waiting in background");
-    showVisibleFormError("Skjemaet lastes ferdig i bakgrunnen. Vent et øyeblikk.");
+    showVisibleFormError(getUI().errors.loading);
     return;
   }
 
@@ -1102,6 +1681,7 @@ function toggleKajabiStep(isVisible) {
 function render() {
   app.className = "app fade-enter";
   toggleKajabiStep(state.stage === "gate");
+  applyStaticTranslations();
 
   switch (state.stage) {
     case "question":
@@ -1130,40 +1710,39 @@ function render() {
 }
 
 function renderLanding() {
+  const ui = getUI();
   app.innerHTML = `
     <section class="hero">
       <div class="hero-card panel">
         <div>
-          <span class="eyebrow">Teamdiagnose</span>
-          <h1 class="title">Hva skjer under overflaten i teamet ditt?</h1>
-          <p class="subtitle">
-            Mange team beskriver utfordringene sine som kommunikasjonsproblemer. Ofte er det noe mer. Denne quizen hjelper deg å se hvilke skjulte mønstre som påvirker beslutninger, samarbeid og fremdrift i teamet ditt.
-          </p>
+          <span class="eyebrow">${ui.eyebrow || ui.quizLabel}</span>
+          <h1 class="title">${ui.landingTitle}</h1>
+          <p class="subtitle">${ui.landingSubtitle}</p>
           <div class="support-list">
-            <div class="support-item">Tar 3–4 minutter.</div>
-            <div class="support-item">Du får en kort diagnose på skjermen, og resultatet sendt på e-post.</div>
+            <div class="support-item">${ui.landingSupport1 || ui.supportDuration}</div>
+            <div class="support-item">${ui.landingSupport2 || ui.supportEmail}</div>
           </div>
           <div class="button-row">
-            <button class="button" data-action="start-quiz">Start quizen</button>
+            <button class="button" data-action="start-quiz">${ui.startQuiz}</button>
             ${
               Object.keys(state.answers).length > 0
-                ? '<button class="ghost-button" data-action="resume-quiz">Fortsett der du slapp</button>'
+                ? `<button class="ghost-button" data-action="resume-quiz">${ui.resumeQuiz}</button>`
                 : ""
             }
           </div>
         </div>
         <aside class="hero-aside">
           <div class="metric-card">
-            <strong>Fem skjulte mønstre</strong>
-            <p>VOICE, TRUTH, RESIST, BELONG og POWER oversatt til konkrete signaler i teamhverdagen.</p>
+            <strong>${ui.metricOneTitle}</strong>
+            <p>${ui.metricOneBody}</p>
           </div>
           <div class="metric-card">
-            <strong>Bygget for ledere</strong>
-            <p>Et rolig, presist og profesjonelt verktøy for seniorledere og mellomledere som vil se klarere.</p>
+            <strong>${ui.metricTwoTitle}</strong>
+            <p>${ui.metricTwoBody}</p>
           </div>
           <div class="metric-card">
-            <strong>Diagnostiserer teamet</strong>
-            <p>Resultatet beskriver miljøet og dynamikken i teamet, ikke personligheten til den som svarer.</p>
+            <strong>${ui.metricThreeTitle}</strong>
+            <p>${ui.metricThreeBody}</p>
           </div>
         </aside>
       </div>
@@ -1172,8 +1751,17 @@ function renderLanding() {
 }
 
 function renderQuestion() {
-  const question = QUESTIONS[state.currentQuestionIndex];
+  const ui = getUI();
+  const question = getTranslatedQuestion(QUESTIONS[state.currentQuestionIndex]);
   const progress = ((state.currentQuestionIndex + 1) / QUESTIONS.length) * 100;
+  const questionCount =
+    typeof ui.questionMeta === "function"
+      ? ui.questionMeta(state.currentQuestionIndex + 1, QUESTIONS.length)
+      : ui.questionCount
+          .replace("{current}", state.currentQuestionIndex + 1)
+          .replace("{total}", QUESTIONS.length);
+  const questionLabel =
+    typeof ui.questionLabel === "function" ? ui.questionLabel(question.id) : `${question.id} ${ui.questionLabel}`;
 
   app.innerHTML = `
     <section class="question-layout">
@@ -1181,18 +1769,18 @@ function renderQuestion() {
         <div class="topbar">
           <div class="progress-wrap">
             <div class="progress-meta">
-              <span>Spørsmål ${state.currentQuestionIndex + 1} av ${QUESTIONS.length}</span>
+              <span>${questionCount}</span>
               <span>${Math.round(progress)} %</span>
             </div>
             <div class="progress-bar" aria-hidden="true">
               <div class="progress-fill" style="width: ${progress}%"></div>
             </div>
           </div>
-          <button class="back-button" data-action="go-back">Tilbake</button>
+          <button class="back-button" data-action="go-back">${ui.back}</button>
         </div>
 
         <div>
-          <span class="section-label"><strong>${question.id}</strong> Teammønster</span>
+          <span class="section-label">${questionLabel}</span>
         </div>
 
         <h2 class="question-title">${question.prompt}</h2>
@@ -1216,68 +1804,71 @@ function renderQuestion() {
 
 function renderResult() {
   const results = state.results || calculateResults(state.answers);
-  const content = RESULT_CONTENT[results.primary];
-  const secondaryLabel = PATTERN_LABELS[results.secondary];
-  const blended = SECONDARY_SNIPPETS[results.primary][results.secondary] || "";
-  const helpPriorityMeta = HELP_PRIORITY_META[results.helpPriority];
-  const severityCTA = CTA_BY_SEVERITY[results.severity] || CTA_BY_SEVERITY.MEDIUM;
-  const framingText =
-    "Alle team har mønstre. Denne diagnosen viser hva som er mest aktivt hos dere akkurat nå – enten som tidlige signaler eller mer etablerte utfordringer.";
+  const ui = getUI();
+  const resultsContent = getResults();
+  const patternLabels = getPatternLabels();
+  const secondarySnippets = getSecondarySnippets();
+  const severityCopy = getSeverityCopy();
+  const severityCtas = getSeverityCTA();
+  const helpPriorityMeta = getHelpPriorityMeta()[results.helpPriority];
+  const content = resultsContent[results.primary];
+  const secondaryLabel = patternLabels[results.secondary];
+  const blended = secondarySnippets[results.primary][results.secondary] || "";
+  const severityCTA = severityCtas[results.severity] || severityCtas.MEDIUM;
+  const framingText = ui.framing || ui.framingText;
 
   app.innerHTML = `
     <section class="result-layout">
       <div class="result-card panel">
         <div class="topbar">
-          <span class="section-label"><strong>Resultat</strong> Teamdiagnose</span>
-          <button class="back-button" data-action="restart-quiz">Ta quizen på nytt</button>
+          <span class="section-label"><strong>${ui.resultLabel}</strong> ${ui.quizLabel}</span>
+          <button class="back-button" data-action="restart-quiz">${ui.restart}</button>
         </div>
 
         <div class="result-header">
           <div class="result-meta">
-            <span class="result-chip"><strong>Dominant pattern</strong> ${PATTERN_LABELS[results.primary]}</span>
-            <span class="result-chip"><strong>Secondary pattern</strong> ${secondaryLabel}</span>
-            <span class="result-chip"><strong>Severity</strong> ${results.severity}</span>
+            <span class="result-chip"><strong>${ui.dominantPattern}</strong> ${patternLabels[results.primary]}</span>
+            <span class="result-chip"><strong>${ui.secondaryPattern}</strong> ${secondaryLabel}</span>
+            <span class="result-chip"><strong>${ui.severity}</strong> ${results.severity}</span>
             ${
               helpPriorityMeta
-                ? `<span class="result-chip"><strong>Hjelpebehov</strong> ${helpPriorityMeta.label}</span>`
+                ? `<span class="result-chip"><strong>${ui.helpNeed}</strong> ${helpPriorityMeta.label}</span>`
                 : ""
             }
           </div>
           <p class="result-framing">${framingText}</p>
           <h2 class="result-title">${content.title}</h2>
           <p class="result-intro">${content.diagnostic}</p>
-          <p class="result-balance">
-            Dette betyr ikke at teamet ditt “er slik”, men at dette er mønstre som ser ut til å være mer aktive akkurat nå.
-          </p>
+          <p class="result-balance">${ui.balance || ui.balanceText}</p>
         </div>
 
         <div class="result-grid">
           <section class="result-section">
-            <h3>Dette viser seg ofte som</h3>
+            <h3>${ui.showsAs}</h3>
             <ul>
               ${content.showsAs.map((item) => `<li>${item}</li>`).join("")}
             </ul>
           </section>
           <section class="result-section">
-            <h3>Det som ofte ligger under</h3>
+            <h3>${ui.whatLiesUnder || ui.under}</h3>
             <p>${content.under}</p>
           </section>
           <section class="result-section">
-            <h3>Et nyttig neste steg for en leder</h3>
+            <h3>${ui.nextStep}</h3>
             <p>${content.nextStep}</p>
           </section>
           <section class="result-section">
-            <h3>Kort diagnose</h3>
+            <h3>${ui.shortDiagnosis}</h3>
             <p>${content.diagnostic}</p>
           </section>
         </div>
 
         ${blended ? `<p class="result-blend">${blended}</p>` : ""}
-        <p class="result-severity">${SEVERITY_COPY[results.severity]}</p>
+        <p class="result-severity">${severityCopy[results.severity]}</p>
         ${
           results.severity === "LOW"
             ? `<p class="result-positive">
-                Dette er ofte et godt tidspunkt å bli bevisst på mønstrene – før de setter seg sterkere i måten teamet jobber på.
+                ${ui.lowPositive}
               </p>`
             : ""
         }
@@ -1285,7 +1876,7 @@ function renderResult() {
           helpPriorityMeta
             ? `
               <section class="result-section">
-                <h3>Det du sannsynligvis trenger mest akkurat nå</h3>
+                <h3>${ui.whatYouNeedMost || ui.helpPriorityTitle}</h3>
                 <p>${helpPriorityMeta.resultCopy}</p>
               </section>
             `
@@ -1297,9 +1888,9 @@ function renderResult() {
           <a class="button" data-action="book-call" href="${BOOKING_URL}" target="_blank" rel="noreferrer noopener">
             ${severityCTA.button}
           </a>
-          <button class="ghost-button" data-action="restart-quiz">Ta quizen på nytt for et annet team</button>
+          <button class="ghost-button" data-action="restart-quiz">${ui.retake || ui.restartOtherTeam}</button>
         </div>
-        <p class="cta-support">25 min – uforpliktende samtale</p>
+        <p class="cta-support">${ui.ctaBookingSub || ui.callLength}</p>
       </div>
     </section>
   `;
