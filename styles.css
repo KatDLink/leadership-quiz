@@ -565,6 +565,22 @@ h3 {
   max-width: 72ch;
 }
 
+.result-framing {
+  opacity: 0.8;
+  margin-bottom: 12px;
+}
+
+.result-balance {
+  margin-top: 12px;
+  opacity: 0.85;
+}
+
+.result-positive {
+  margin-top: 8px;
+  font-style: italic;
+  opacity: 0.85;
+}
+
 .fade-enter {
   animation: fadeSlide 320ms ease;
 }

@@ -1,6 +1,7 @@
 const STORAGE_KEY = "team-surface-quiz-state-v1";
 const PATTERNS = ["VOICE", "TRUTH", "RESIST", "BELONG", "POWER"];
 const BOOKING_URL = "https://calendar.app.google/ur7kRpTwqy6FjUnD7";
+const GOOGLE_SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbwy_FY1ou2kSo-D-u9gTtsBYbfJtiPX3F-q7z0PQHJOfZuI97JfusH9E0VTQNTDtup0/exec";
 const KAJABI_CONFIG = {
   fieldNames: {
     firstName: ["form_submission[name]", "first_name", "name", "contact[first_name]"],
@@ -50,6 +51,21 @@ const PATTERN_LABELS = {
   RESIST: "Skjult motstand",
   BELONG: "Tilhørighet og ekskludering",
   POWER: "Uformelle maktstrukturer",
+};
+
+const CTA_BY_SEVERITY = {
+  LOW: {
+    text: "Hvis du er nysgjerrig på hva dette kan utvikle seg til – og hvordan du kan jobbe mer bevisst med det – kan vi ta en rolig samtale.",
+    button: "Utforsk dette videre",
+  },
+  MEDIUM: {
+    text: "Hvis dette påvirker samarbeid og fremdrift hos dere, kan det være nyttig å se nærmere på hva som faktisk driver det – og hva du konkret kan gjøre.",
+    button: "Se på dette sammen",
+  },
+  HIGH: {
+    text: "Når dette får virke over tid, påvirker det ofte både beslutninger, fremdrift og tillit. Det er mulig å gjøre noe med det – men det starter med å se det tydelig.",
+    button: "Ta tak i dette",
+  },
 };
 
 const HELP_PRIORITY_META = {
@@ -206,10 +222,11 @@ const SECONDARY_SNIPPETS = {
 };
 
 const SEVERITY_COPY = {
-  LOW: "Akkurat nå ser dette mest ut som et mønster det er nyttig å bli bevisst på tidlig. Det betyr ikke nødvendigvis at teamet er fastlåst, men at det finnes signaler som er verdt å ta på alvor før de setter seg sterkere i kultur og samarbeid.",
+  LOW: "Dette ser foreløpig ut som et tidlig signal, mer enn et tydelig problem. Det betyr at det er noe her som er verdt å være bevisst på – før det får utvikle seg til noe som påvirker samarbeid og fremdrift sterkere.",
   MEDIUM:
     "Dette ser ut til å være tydelig nok til at det påvirker samarbeid og fremdrift i praksis. Det betyr ikke at teamet mangler vilje eller kompetanse, men at noen underliggende forhold gjør arbeidet tyngre enn det trenger å være.",
-  HIGH: "Dette ser ut til å ha blitt så tydelig at det sannsynligvis påvirker både tillit, beslutningskvalitet og gjennomføring. Når slike mønstre får virke over tid, koster det ofte mer enn man tror – ikke bare i energi, men også i kvaliteten på arbeidet og evnen til å stå samlet.",
+  HIGH:
+    "Dette ser ut til å være et etablert mønster som påvirker både samarbeid, beslutninger og fremdrift. Når slike mønstre får virke over tid, koster det ofte mer enn man tror – både i energi og i kvaliteten på arbeidet.",
 };
 
 const QUESTIONS = [
@@ -345,12 +362,12 @@ const QUESTIONS = [
   },
   {
     id: "Q14",
-    prompt: "Hvor alvorlig opplever du at dette er akkurat nå?",
+    prompt: "Hvordan vil du beskrive dette i teamet ditt akkurat nå?",
     options: [
-      { key: "A", text: "Mer et irritasjonsmoment enn et reelt hinder", scores: {}, severity: 0 },
-      { key: "B", text: "Det hemmer samarbeid merkbart", scores: {}, severity: 1 },
-      { key: "C", text: "Det påvirker beslutninger og fremdrift tydelig", scores: {}, severity: 2 },
-      { key: "D", text: "Det begynner å få tydelige konsekvenser for tillit, resultater eller kultur", scores: {}, severity: 3 },
+      { key: "A", text: "Mer et tidlig signal enn et reelt hinder", scores: {}, severity: 0 },
+      { key: "B", text: "Begynner å påvirke samarbeid merkbart", scores: {}, severity: 1 },
+      { key: "C", text: "Påvirker beslutninger og fremdrift tydelig", scores: {}, severity: 2 },
+      { key: "D", text: "Har tydelige konsekvenser for tillit, resultater eller kultur", scores: {}, severity: 3 },
     ],
   },
   {
@@ -417,6 +434,7 @@ let kajabiSubmitBound = false;
 let kajabiCleanupStarted = false;
 let visibleLeadBound = false;
 let pendingLeadSubmission = null;
+let googleSheetsSent = false;
 
 render();
 
@@ -451,6 +469,7 @@ function resetQuiz() {
   finalResult = null;
   visibleLeadBound = false;
   pendingLeadSubmission = null;
+  googleSheetsSent = false;
   state = structuredClone(defaultState);
   saveState();
   trackEvent("quiz_restart", { source: "user_action" });
@@ -481,6 +500,11 @@ function answerQuestion(questionId, optionKey) {
   if (isLastQuestion && computedResult) {
     finalResult = buildKajabiResultPayload(computedResult);
     console.log("Final quiz result:", finalResult);
+
+    if (!googleSheetsSent) {
+      sendToGoogleSheets(finalResult);
+      googleSheetsSent = true;
+    }
   }
 
   trackEvent("quiz_answered", {
@@ -634,6 +658,32 @@ function buildKajabiResultPayload(result) {
     severity: result.severity,
     helpPriority: result.helpPriority,
   };
+}
+
+function sendToGoogleSheets(result) {
+  if (!result) return;
+
+  const payload = {
+    primary: result.primaryResult,
+    secondary: result.secondaryResult,
+    severity: result.severity,
+    helpPriority: result.helpPriority,
+    timestamp: new Date().toISOString(),
+  };
+
+  fetch(GOOGLE_SHEETS_WEBHOOK, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+    .then(() => {
+      console.log("Sent to Google Sheets:", payload);
+    })
+    .catch((err) => {
+      console.warn("Google Sheets error:", err);
+    });
 }
 
 function getKajabiFieldByNames(names) {
@@ -1170,8 +1220,9 @@ function renderResult() {
   const secondaryLabel = PATTERN_LABELS[results.secondary];
   const blended = SECONDARY_SNIPPETS[results.primary][results.secondary] || "";
   const helpPriorityMeta = HELP_PRIORITY_META[results.helpPriority];
-  const ctaText =
-    "Hvis du kjenner igjen dette bildet, kan det være nyttig å se nærmere på hva som faktisk skjer under overflaten i teamet ditt.";
+  const severityCTA = CTA_BY_SEVERITY[results.severity] || CTA_BY_SEVERITY.MEDIUM;
+  const framingText =
+    "Alle team har mønstre. Denne diagnosen viser hva som er mest aktivt hos dere akkurat nå – enten som tidlige signaler eller mer etablerte utfordringer.";
 
   app.innerHTML = `
     <section class="result-layout">
@@ -1192,8 +1243,12 @@ function renderResult() {
                 : ""
             }
           </div>
+          <p class="result-framing">${framingText}</p>
           <h2 class="result-title">${content.title}</h2>
           <p class="result-intro">${content.diagnostic}</p>
+          <p class="result-balance">
+            Dette betyr ikke at teamet ditt “er slik”, men at dette er mønstre som ser ut til å være mer aktive akkurat nå.
+          </p>
         </div>
 
         <div class="result-grid">
@@ -1220,6 +1275,13 @@ function renderResult() {
         ${blended ? `<p class="result-blend">${blended}</p>` : ""}
         <p class="result-severity">${SEVERITY_COPY[results.severity]}</p>
         ${
+          results.severity === "LOW"
+            ? `<p class="result-positive">
+                Dette er ofte et godt tidspunkt å bli bevisst på mønstrene – før de setter seg sterkere i måten teamet jobber på.
+              </p>`
+            : ""
+        }
+        ${
           helpPriorityMeta
             ? `
               <section class="result-section">
@@ -1230,9 +1292,11 @@ function renderResult() {
             : ""
         }
 
-        <p class="cta-support">${ctaText}</p>
+        <p class="cta-support">${severityCTA.text}</p>
         <div class="button-row">
-          <a class="button" data-action="book-call" href="${BOOKING_URL}" target="_blank" rel="noreferrer noopener">Book en samtale</a>
+          <a class="button" data-action="book-call" href="${BOOKING_URL}" target="_blank" rel="noreferrer noopener">
+            ${severityCTA.button}
+          </a>
           <button class="ghost-button" data-action="restart-quiz">Ta quizen på nytt for et annet team</button>
         </div>
         <p class="cta-support">25 min – uforpliktende samtale</p>
