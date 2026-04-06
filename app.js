@@ -1241,7 +1241,7 @@ function sendToGoogleSheets(result) {
     secondary: result.secondaryResult,
     severity: result.severity,
     helpPriority: result.helpPriority,
-    language: currentLanguage,
+    language: typeof currentLanguage !== "undefined" ? currentLanguage : "no",
     timestamp: new Date().toISOString(),
   };
 
@@ -1251,6 +1251,7 @@ function sendToGoogleSheets(result) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+    mode: "no-cors",
   })
     .then(() => {
       console.log("Sent to Google Sheets:", payload);
