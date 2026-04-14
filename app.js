@@ -102,9 +102,9 @@ const UI_NO = {
   callLength: "25 min – uforpliktende samtale",
   kajabiTitle: "Vil du se diagnosen din?",
   kajabiBody:
-    "Legg inn navn og e-post, så sender jeg deg resultatet ditt – med en kort forklaring på hva som sannsynligvis preger teamet ditt akkurat nå.",
+    "Legg inn navn og e-post, så vises resultatene dine med en gang her på skjermen.",
   kajabiSupport:
-    "Du får også relevante oppfølginger knyttet til utfordringen quizen peker på.",
+    "Du får også noen relevante oppfølginger knyttet til utfordringen resultatene dine peker på.",
   nameLabel: "Navn",
   emailLabel: "E-post",
   visibleSubmit: "Se resultatet mitt",
@@ -138,14 +138,14 @@ const UI_EN = {
   back: "Back",
   gateTitle: "Would you like to see your diagnosis?",
   gateBody:
-    "Enter your name and email, and I’ll send your result with a short explanation of what may be shaping your team right now.",
+    "Enter your name and email and your results will appear right here on screen.",
   gateSupport:
-    "You’ll also receive a few relevant follow-ups related to the challenge your quiz points to.",
+    "You'll also receive a few relevant follow-ups related to the challenge your results point to.",
   kajabiTitle: "Would you like to see your diagnosis?",
   kajabiBody:
-    "Enter your name and email, and I’ll send your result with a short explanation of what may be shaping your team right now.",
+    "Enter your name and email and your results will appear right here on screen.",
   kajabiSupport:
-    "You’ll also receive a few relevant follow-ups related to the challenge your quiz points to.",
+    "You'll also receive a few relevant follow-ups related to the challenge your results point to.",
   resultLabel: "Result",
   resultTitlePrefix: "Team diagnosis",
   dominantPattern: "Dominant pattern",
@@ -185,14 +185,17 @@ const UI_EN = {
 
 const CTA_BY_SEVERITY = {
   LOW: {
+    shortText: "Hvis du vil utforske dette tidlig og bevisst, kan vi ta en rolig samtale.",
     text: "Hvis du er nysgjerrig på hva dette kan utvikle seg til – og hvordan du kan jobbe mer bevisst med det – kan vi ta en rolig samtale.",
     button: "Utforsk dette videre",
   },
   MEDIUM: {
+    shortText: "Hvis dette allerede merkes i samarbeidet, kan det være nyttig å se nærmere på det sammen.",
     text: "Hvis dette påvirker samarbeid og fremdrift hos dere, kan det være nyttig å se nærmere på hva som faktisk driver det – og hva du konkret kan gjøre.",
     button: "Se på dette sammen",
   },
   HIGH: {
+    shortText: "Hvis dette har fått feste, kan det være nyttig å ta tak i det med et tydelig blikk utenfra.",
     text: "Når dette får virke over tid, påvirker det ofte både beslutninger, fremdrift og tillit. Det er mulig å gjøre noe med det – men det starter med å se det tydelig.",
     button: "Ta tak i dette",
   },
@@ -200,14 +203,17 @@ const CTA_BY_SEVERITY = {
 
 const CTA_BY_SEVERITY_EN = {
   LOW: {
+    shortText: "If you want to explore this early and consciously, we can have a calm conversation.",
     text: "If you're curious about what this could develop into – and how you can work with it more consciously – we can have a calm conversation.",
     button: "Explore this further",
   },
   MEDIUM: {
+    shortText: "If this is already showing up in collaboration, it may be useful to look at it together.",
     text: "If this is affecting collaboration and momentum in your team, it may be useful to look more closely at what is actually driving it – and what you can concretely do.",
     button: "Look at this together",
   },
   HIGH: {
+    shortText: "If this has become established, it may help to address it with a clearer outside perspective.",
     text: "When this is allowed to continue over time, it often affects decisions, momentum, and trust. Something can be done about it – but it starts with seeing it clearly.",
     button: "Address this now",
   },
@@ -1817,9 +1823,10 @@ function renderResult() {
   const blended = secondarySnippets[results.primary][results.secondary] || "";
   const severityCTA = severityCtas[results.severity] || severityCtas.MEDIUM;
   const framingText = ui.framing || ui.framingText;
+  const severityClass = `severity-${results.severity.toLowerCase()}`;
 
   app.innerHTML = `
-    <section class="result-layout">
+    <section class="result-layout ${severityClass}">
       <div class="result-card panel">
         <div class="topbar">
           <span class="section-label"><strong>${ui.resultLabel}</strong> ${ui.quizLabel}</span>
@@ -1843,6 +1850,23 @@ function renderResult() {
           <p class="result-balance">${ui.balance || ui.balanceText}</p>
         </div>
 
+        <section class="result-cta-top">
+          <p class="result-cta-top-copy">${severityCTA.shortText || severityCTA.text}</p>
+          <div class="button-row result-cta-top-actions">
+            <a
+              class="button"
+              data-action="book-call"
+              data-placement="upper"
+              href="${BOOKING_URL}"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              ${severityCTA.button}
+            </a>
+          </div>
+          <p class="result-cta-subtext">${ui.ctaBookingSub || ui.callLength}</p>
+        </section>
+
         <div class="result-grid">
           <section class="result-section">
             <h3>${ui.showsAs}</h3>
@@ -1857,10 +1881,6 @@ function renderResult() {
           <section class="result-section">
             <h3>${ui.nextStep}</h3>
             <p>${content.nextStep}</p>
-          </section>
-          <section class="result-section">
-            <h3>${ui.shortDiagnosis}</h3>
-            <p>${content.diagnostic}</p>
           </section>
         </div>
 
@@ -1886,7 +1906,7 @@ function renderResult() {
 
         <p class="cta-support">${severityCTA.text}</p>
         <div class="button-row">
-          <a class="button" data-action="book-call" href="${BOOKING_URL}" target="_blank" rel="noreferrer noopener">
+          <a class="button" data-action="book-call" data-placement="lower" href="${BOOKING_URL}" target="_blank" rel="noreferrer noopener">
             ${severityCTA.button}
           </a>
           <button class="ghost-button" data-action="restart-quiz">${ui.retake || ui.restartOtherTeam}</button>
@@ -1921,6 +1941,7 @@ function wireEvents() {
       trackEvent("quiz_book_call_clicked", {
         primary_result: state.results?.primary,
         secondary_result: state.results?.secondary,
+        placement: button.dataset.placement || "default",
       });
     });
   });
