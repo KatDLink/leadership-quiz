@@ -185,7 +185,7 @@ const UI_EN = {
 
 const CTA_BY_SEVERITY = {
   LOW: {
-    shortText: "Hvis du vil utforske dette tidlig og bevisst, kan vi ta en rolig samtale.",
+    shortText: "Hvis du vil utforske dette tidlig og bevisst, kan vi ta en samtale.",
     text: "Hvis du er nysgjerrig på hva dette kan utvikle seg til – og hvordan du kan jobbe mer bevisst med det – kan vi ta en rolig samtale.",
     button: "Utforsk dette videre",
   },
@@ -203,7 +203,7 @@ const CTA_BY_SEVERITY = {
 
 const CTA_BY_SEVERITY_EN = {
   LOW: {
-    shortText: "If you want to explore this early and consciously, we can have a calm conversation.",
+    shortText: "If you want to explore this early and consciously, we can have a conversation.",
     text: "If you're curious about what this could develop into – and how you can work with it more consciously – we can have a calm conversation.",
     button: "Explore this further",
   },
