@@ -384,10 +384,13 @@ h3 {
 
 .result-layout .button[data-action="book-call"] {
   background:
-    linear-gradient(180deg, rgba(255, 247, 232, 0.96) 0%, var(--severity-accent) 100%);
+    linear-gradient(90deg, #169dff 0%, #4f63ff 48%, #8b3dff 100%);
+  color: #f8fbff;
+  text-shadow: 0 1px 0 rgba(7, 10, 22, 0.28);
   box-shadow:
-    0 14px 34px var(--severity-glow),
-    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+    0 16px 38px rgba(86, 80, 255, 0.34),
+    0 0 18px var(--severity-glow),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
 }
 
 .button:hover,
@@ -399,8 +402,9 @@ h3 {
 
 .result-layout .button[data-action="book-call"]:hover {
   box-shadow:
-    0 18px 40px var(--severity-glow),
-    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+    0 20px 44px rgba(86, 80, 255, 0.38),
+    0 0 22px var(--severity-glow),
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset;
 }
 
 .ghost-button,
