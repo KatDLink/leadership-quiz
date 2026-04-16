@@ -71,7 +71,7 @@ const UI_NO = {
   landingSubtitle:
     "Mange team beskriver utfordringene sine som kommunikasjonsproblemer. Ofte er det noe mer. Denne quizen hjelper deg å se hvilke skjulte mønstre som påvirker beslutninger, samarbeid og fremdrift i teamet ditt.",
   supportDuration: "Tar 3–4 minutter.",
-  supportEmail: "Du får en kort diagnose på skjermen.,
+  supportEmail: "Du får en kort diagnose på skjermen, og resultatet sendt på e-post.",
   metricOneTitle: "Fem skjulte mønstre",
   metricOneBody: "VOICE, TRUTH, RESIST, BELONG og POWER oversatt til konkrete signaler i teamhverdagen.",
   metricTwoTitle: "Bygget for ledere",
@@ -123,9 +123,9 @@ const UI_EN = {
   landingSubtitle:
     "Many teams describe their challenges as communication problems. Often, it is something more. This quiz helps you see which hidden patterns may be affecting decisions, collaboration, and momentum in your team.",
   landingSupport1: "Takes 3–4 minutes.",
-  landingSupport2: "You’ll see a short diagnosis on screen.",
+  landingSupport2: "You’ll see a short diagnosis on screen, and receive the result by email.",
   supportDuration: "Takes 3–4 minutes.",
-  supportEmail: "You’ll see a short diagnosis on screen.",
+  supportEmail: "You’ll see a short diagnosis on screen, and receive the result by email.",
   metricOneTitle: "Five hidden patterns",
   metricOneBody: "VOICE, TRUTH, RESIST, BELONG, and POWER translated into concrete signals in everyday team life.",
   metricTwoTitle: "Built for leaders",
@@ -185,8 +185,8 @@ const UI_EN = {
 
 const CTA_BY_SEVERITY = {
   LOW: {
-    shortText: "Hvis du vil utforske dette tidlig og bevisst, kan vi ta en samtale.",
-    text: "Hvis du er nysgjerrig på hva dette kan utvikle seg til – og hvordan du kan jobbe mer bevisst med det – kan vi ta en samtale.",
+    shortText: "Hvis du vil utforske dette tidlig og bevisst, kan vi ta en rolig samtale.",
+    text: "Hvis du er nysgjerrig på hva dette kan utvikle seg til – og hvordan du kan jobbe mer bevisst med det – kan vi ta en rolig samtale.",
     button: "Utforsk dette videre",
   },
   MEDIUM: {
@@ -203,8 +203,8 @@ const CTA_BY_SEVERITY = {
 
 const CTA_BY_SEVERITY_EN = {
   LOW: {
-    shortText: "If you want to explore this early and consciously, we can have a conversation.",
-    text: "If you're curious about what this could develop into – and how you can work with it more consciously – we can have a conversation.",
+    shortText: "If you want to explore this early and consciously, we can have a calm conversation.",
+    text: "If you're curious about what this could develop into – and how you can work with it more consciously – we can have a calm conversation.",
     button: "Explore this further",
   },
   MEDIUM: {
